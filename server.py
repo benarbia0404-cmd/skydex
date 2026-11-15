@@ -130,20 +130,27 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, hit[1], {'X-SkyDex-Cache': 'hit'})
         if self._throttled() and hit:
             return self._json(200, hit[1], {'X-SkyDex-Cache': 'stale'})
-        try:
-            status, body = fetch_json(f'{UPSTREAM}/v2/point/{key[0]:.1f}/{key[1]:.1f}/{key[2]}')
-            if status != 200:
-                raise urllib.error.HTTPError(None, status, 'upstream', None, None)
-            with _lock:
-                _cache[key] = (now, body)
-                if len(_cache) > 500:   # ménage
-                    for k in sorted(_cache, key=lambda k: _cache[k][0])[:100]:
-                        _cache.pop(k, None)
-            return self._json(200, body, {'X-SkyDex-Cache': 'miss'})
-        except Exception as e:
-            if hit:
-                return self._json(200, hit[1], {'X-SkyDex-Cache': 'stale'})
-            return self._json(502, {'error': 'source ADS-B indisponible', 'detail': str(e)[:200]})
+        urls = [
+            f'{UPSTREAM}/v2/point/{key[0]:.1f}/{key[1]:.1f}/{key[2]}',
+            f'https://api.airplanes.live/v2/point/{key[0]:.1f}/{key[1]:.1f}/{key[2]}',
+            f'https://opendata.adsb.fi/api/v2/lat/{key[0]:.1f}/lon/{key[1]:.1f}/dist/{key[2]}',
+        ]
+        last_err = None
+        for u in urls:
+            try:
+                status, body = fetch_json(u)
+                if status == 200 and body:
+                    with _lock:
+                        _cache[key] = (now, body)
+                        if len(_cache) > 500:
+                            for k in sorted(_cache, key=lambda k: _cache[k][0])[:100]:
+                                _cache.pop(k, None)
+                    return self._json(200, body, {'X-SkyDex-Cache': 'miss'})
+            except Exception as e:
+                last_err = e
+        if hit:
+            return self._json(200, hit[1], {'X-SkyDex-Cache': 'stale'})
+        return self._json(502, {'error': 'source ADS-B indisponible', 'detail': str(last_err)[:200]})
 
     def api_routes(self):
         try:

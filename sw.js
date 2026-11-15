@@ -1,5 +1,5 @@
 // Service worker SkyDex : coque de l'application disponible hors connexion, données de vol toujours en direct.
-const VERSION = 'skydex-v24';
+const VERSION = 'skydex-v25';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/app.js', './js/brand.js', './js/catalog.js', './js/cards.js', './js/cinematic.js', './js/encounter.js',
@@ -19,7 +19,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
   // Trafic ADS-B : toujours le réseau (jamais de vieux avions en cache)
-  if (url.hostname.includes('adsb')) return;
+  if (/adsb|airplanes\.live|opensky-network/.test(url.hostname) || url.pathname.startsWith('/api/')) return;
   // Fonds de carte (raster + vectoriel) : cache d'abord (zoom instantané), mise à jour en arrière-plan, plafonné
   if (/tile\.openstreetmap|openfreemap|basemaps/.test(url.hostname)) {
     e.respondWith(caches.open(VERSION + '-tiles').then(async c => {

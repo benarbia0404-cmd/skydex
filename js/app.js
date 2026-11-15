@@ -1,12 +1,12 @@
 // SkyDex — point d'entrée : radar, fiche de vol (boarding pass), recherche, filtres, réglages, apparitions spéciales.
 import { RARITIES, RARITY_LIST, planeSVG } from './catalog.js';
 import { state, save, onChange, owned, resetAll, ensureMissions, missionEvent, grant } from './state.js';
-import { FlightFeed, posAt, distKm, flightProgress, NM } from './flights.js';
+import { FlightFeed, posAt, distKm, flightProgress, NM, AIRPORTS } from './flights.js';
 import { openEncounter } from './encounter.js';
 import { PlaneLayer } from './planelayer.js';
 import { initCollection, renderCollection, renderMissions, renderShop, refreshAll } from './screens.js';
+import { cardHTML } from './cards.js';
 import { sfx, vibrate } from './fx.js';
-import { AIRPORTS } from './flights.js';
 import { $, $$, toast, modal, esc, updateHUD, iconSVG } from './ui.js';
 import { FC, FA, fictionCallsign, fictionAirline } from './brand.js';
 
@@ -83,20 +83,20 @@ function initMap() {
   meMarker = L.marker([me.lat, me.lon], {
     icon: L.divIcon({
       className: 'me-mk',
-      html: '<div class="me-wrap"><div class="me-sweep"></div><div class="me-dot"></div></div>',
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
+      html: '<div class="me-wrap"><div class="me-pulse"></div><div class="me-dot"></div><span class="me-zone-tag">MA ZONE · 80 KM</span></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     }),
     interactive: false,
     zIndexOffset: -1000,
   }).addTo(map);
   rangeCircle = L.circle([me.lat, me.lon], {
     radius: RANGE_KM * 1000,
-    color: '#8a94a6',
-    weight: 1.2,
-    dashArray: '4 6',
-    fillColor: '#8a94a6',
-    fillOpacity: .02,
+    color: '#3b82f6',
+    weight: 2,
+    dashArray: '8 6',
+    fillColor: '#3b82f6',
+    fillOpacity: .06,
     interactive: false,
   }).addTo(map);
   sweepMk = L.marker([me.lat, me.lon], {
@@ -367,25 +367,23 @@ function renderFlights() {
     if (ord >= 2) nRare++;
     sky.push({ f, isNew, ord, d: distToMe(f) });
   }
-  $('#status span').textContent = `${feed.mode === 'live' ? 'DIRECT' : 'SIMULATION'} · ${nIn} à portée · ${nNew} nouveau${nNew > 1 ? 'x' : ''}${nRare ? ` · ${nRare} rare${nRare > 1 ? 's' : ''}` : ''}`;
-  $('#status').title = feed.mode === 'live' ? `ADS-B en direct · ${feed.flights.size} avions suivis` : `Simulation · ${feed.flights.size} avions`;
+  $('#status span').textContent = `${feed.mode === 'live' ? 'ADS-B EN DIRECT' : 'RADAR ZONE'} · ${nIn} dans ta zone (80 km) · ${nNew} nouveau${nNew > 1 ? 'x' : ''}${nRare ? ` · ${nRare} rare${nRare > 1 ? 's' : ''}` : ''}`;
+  $('#status').title = feed.mode === 'live' ? `Trafic réel ADS-B (${feed.lastSource || 'live'}) · ${nIn} avions dans ta zone` : `Trafic local · ${nIn} avions dans ta zone`;
   renderSkyBar(sky);
   $('#status').className = 'status ' + (feed.mode === 'live' ? 'live' : 'sim');
   if (selectedId) updateSelection();
 }
 
-// ----------------------------------------------------------------- Sélection / Fiche de vol (style Carte d'Embarquement)
+// ----------------------------------------------------------------- Sélection / Fiche de vol & Aperçu de Carte Verticale
 function select(id) {
   const f = feed.flights.get(id); if (!f) return;
   sfx('tap');
   selectedId = id;
   state.stats.inspected++; missionEvent('inspect');
   const [lat, lon] = posAt(f);
-  map.panTo([lat, lon], { animate: true, duration: 0.45 });
+  map.panTo([lat, lon], { animate: true, duration: 0.4 });
   renderFlights();
-  // À portée : la carte arrive directement en rotation 3D. Hors portée : fiche spotter (infos + arrivée estimée).
-  if (inRange(f)) { $('#sheet').hidden = true; engage(f); }
-  else renderSheet(f);
+  renderSheet(f);
 }
 
 // Plusieurs avions superposés sous le doigt : on propose de choisir
@@ -437,34 +435,51 @@ function deselect() {
 function renderSheet(f) {
   const m = f.model, r = RARITIES[m.rarity], have = owned(m.id);
   const sh = $('#sheet');
+  const routeStr = f.from && f.to ? `${f.from.code} → ${f.to.code}` : '';
   sh.hidden = false; sh.style.setProperty('--rc', r.color);
   sh.innerHTML = `
     <div class="grab"></div>
     <div class="sh-strip-top">
-      <span class="sec-kicker">FICHE DE VOL · ${esc(m.code || m.id)}</span>
-      <span class="sh-collect-status ${have ? 'owned' : 'new'}">
-        ${have ? `EN HANGAR ×${state.cards[m.id].count}` : 'NOUVEL APPAREIL'}
-      </span>
-    </div>
-    <div class="sh-head">
-      <div class="sh-ic">${planeSVG(m)}</div>
-      <div class="sh-title">
-        <div class="sh-callsign-row">
-          <h2>${esc(FC(f))}</h2>
-          <span class="rtag" style="--rc:${r.color}">${r.code} · ${r.label}</span>
-        </div>
-        <small>${f.airline ? esc(FA(f)) + ' · ' : ''}${esc(m.name)}</small>
+      <span class="sec-kicker">VOL EN DIRECT · ${esc(m.code || m.id)}</span>
+      <div class="sh-strip-right">
+        <span class="sh-collect-status ${have ? 'owned' : 'new'}">
+          ${have ? `EN COLLECTION ×${state.cards[m.id].count}` : 'NOUVELLE CARTE'}
+        </span>
+        <button class="sh-close" id="sh-close" aria-label="Fermer">✕</button>
       </div>
-      <button class="sh-close" id="sh-close" aria-label="Fermer">✕</button>
     </div>
-    <div id="sh-route"></div>
-    <div class="sh-perforation"></div>
-    <div class="data" id="sh-data"></div>
+    <div class="sh-body-split">
+      <div class="sh-card-preview" id="sh-card-preview" title="Toucher pour capturer cette carte">
+        ${cardHTML(m, {
+          size: 'sm',
+          isNew: !have,
+          callsign: FC(f),
+          airline: FA(f),
+          reg: f.reg,
+          route: routeStr,
+        })}
+      </div>
+      <div class="sh-info-col">
+        <div class="sh-head">
+          <div class="sh-title">
+            <div class="sh-callsign-row">
+              <h2>${esc(FC(f))}</h2>
+              <span class="rtag" style="--rc:${r.color}">${r.label}</span>
+            </div>
+            <small>${f.airline ? esc(FA(f)) + ' · ' : ''}<b>${esc(m.name)}</b></small>
+          </div>
+        </div>
+        <div id="sh-route"></div>
+        <div class="data" id="sh-data"></div>
+      </div>
+    </div>
     <div id="sh-cta"></div>`;
   trailLine && (trailLine.remove(), trailLine = null);
   routeLine && (routeLine.remove(), routeLine = null);
   doneLine && (doneLine.remove(), doneLine = null);
   $('#sh-close').onclick = deselect;
+  const cardPrev = $('#sh-card-preview');
+  if (cardPrev) cardPrev.onclick = () => { if (inRange(f)) { $('#sheet').hidden = true; engage(f); } };
   sh.dataset.far = '';
   updateSelection();
 }
@@ -499,8 +514,8 @@ function updateSelection() {
     cta.dataset.far = String(far);
     if (!far) {
       if (wasFar) toast(`<b>${esc(FC(f))}</b> est entré dans ta zone !`, 'gold');
-      cta.innerHTML = `<button class="btn gold block" id="sh-card">${iconSVG('collection')}<span>CAPTURER LA CARTE</span></button>`;
-      $('#sh-card').onclick = () => engage(f);
+      cta.innerHTML = `<button class="btn gold block" id="sh-card">${iconSVG('collection')}<span>CAPTURER LA CARTE · ${esc(f.model.name.toUpperCase())}</span></button>`;
+      $('#sh-card').onclick = () => { $('#sheet').hidden = true; engage(f); };
     } else {
       cta.innerHTML = `<div class="sh-far"><div><b>Hors de portée</b><span id="sh-eta"></span></div>
         <button class="btn sm-btn" id="sh-watch">${watched.has(f.id) ? 'Alerte activée' : "M'alerter"}</button></div>`;
@@ -666,8 +681,8 @@ function openSettings() {
     <div class="setting"><span>[DEV] Contact historique</span><button class="btn sm-btn" id="s-spawn">Générer</button></div>
     <div class="setting"><span>[DEV] Dotation</span><button class="btn sm-btn" id="s-coins">+1 000 CR</button></div>` : ''}
     <div class="setting"><span>Registre local</span><button class="btn sm-btn danger" id="s-reset">Réinitialiser</button></div>
-    <p class="note">Flux ADS-B : adsb.lol · État : ${feed.mode === 'live' ? 'DIRECT' : 'SIMULATION' + (feed.lastError ? ' (' + esc(feed.lastError) + ')' : '')}.</p>
-    <p class="note">SkyDex est un jeu indépendant. Les compagnies, constructeurs et modèles affichés sont des noms <b>fictifs</b>, inspirés de données de vol publiques (ADS-B). Toute ressemblance avec des marques existantes est une transposition ludique ; aucune affiliation ni approbation n'est revendiquée.</p>
+    <p class="note">Flux ADS-B multi-sources (adsb.fi · airplanes.live · adsb.lol · OpenSky) · État : ${feed.mode === 'live' ? 'EN DIRECT (' + esc(feed.lastSource || 'ADS-B') + ')' : 'TRAFIC LOCAL' + (feed.lastError ? ' (' + esc(feed.lastError) + ')' : '')}.</p>
+    <p class="note">SkyDex affiche les appareils qui survolent ta zone de 80 km en temps réel et les transforme en cartes de collection aéronautiques.</p>
     <button class="btn gold block" data-close>Fermer</button>`, (m, close) => {
     $('#s-mode').value = state.settings.mode;
     $('#s-mode').onchange = e => { state.settings.mode = e.target.value; save(); feed.fails = 0; feed.lastTry = 0; feed.poll(); };
@@ -711,13 +726,13 @@ function specialTick() {
 function showOnboarding() {
   const slides = [
     { art: `<div class="ob-radar"><i></i><b style="--a:30deg;--r:38%"></b><b class="r" style="--a:150deg;--r:30%"></b><b class="e" style="--a:250deg;--r:42%"></b></div>`,
-      title: 'Ton ciel est un terrain de chasse', text: 'Les vrais avions qui volent au-dessus de toi apparaissent en direct sur ton radar, avec leur compagnie, leur route et leur altitude.' },
-    { art: `<div class="ob-vf"><div class="ob-vf-ring"></div><div class="ob-vf-cross"></div><div class="ob-vf-plane">${planeSVG('wide')}</div><span class="ob-vf-tag mono">AF ★ NET</span></div>`,
-      title: 'Mise au point, déclic, Polaroïd', text: 'Touche un avion dans ton ciel et glisse la bague de mise au point tactile jusqu’à ce qu’il soit parfaitement net. Relâche pour déclencher le flash : ton Polaroïd pivote en carte 3D et glisse dans ta collection !' },
+      title: 'Ta zone de 80 km en temps réel', text: 'Les vrais avions qui survolent ta zone apparaissent en direct sur ton radar avec leur compagnie, leur route et leur télémétrie.' },
+    { art: `<div class="ob-vf"><div class="ob-vf-ring"></div><div class="ob-vf-cross"></div><div class="ob-vf-plane">${planeSVG('wide')}</div><span class="ob-vf-tag mono">A380 ★ NET</span></div>`,
+      title: 'Capture de vraies cartes verticales', text: 'Touche un avion pour voir sa trajectoire et l’aperçu de sa carte. Ajuste la bague de mise au point pour rendre la carte parfaitement nette et l’ajouter à ta collection !' },
     { art: `<div class="ob-rar">${RARITY_LIST.map(r => `<span style="--rc:${r.color}">${r.code}</span>`).join('')}</div>`,
-      title: 'Complète ton hangar', text: 'Commun, rare, épique… jusqu’aux légendaires comme le géant à double pont ou le supersonique Mach 2. Ouvre des packs, réussis tes missions et deviens le meilleur spotter.' },
+      title: 'Collectionne toute la flotte mondiale', text: 'Airbus A380, Boeing 747-8, Rafale, Concorde… Collectionne les 5 raretés, ouvre des packs et complète ton hangar aéronautique.' },
     { art: `<div class="ob-pin">${iconSVG('locate')}</div>`,
-      title: 'Active ta position', text: 'SkyDex a besoin de ta position pour savoir quels avions passent au-dessus de toi. Elle reste sur ton téléphone et n’est jamais partagée.', last: true },
+      title: 'Active ta position', text: 'SkyDex utilise ta position uniquement sur ton appareil pour centrer ta zone radar de 80 km sur ton ciel.', last: true },
   ];
   const el = document.createElement('div');
   el.className = 'onboard';
@@ -787,7 +802,7 @@ function init() {
   if (state.onboarded) locate(true);
   else setTimeout(showOnboarding, 2600); // après l'écran d'accueil
   refreshAll();
-  setInterval(renderFlights, 1000);
+  setInterval(renderFlights, 300);
   setInterval(specialTick, 1000);
   setInterval(alertTick, 4000);
   setInterval(() => { if ($('#view-shop').classList.contains('active')) renderShop(); }, 60000);

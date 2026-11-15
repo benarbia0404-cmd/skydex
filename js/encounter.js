@@ -1,22 +1,21 @@
-// Rencontre + capture « Spotter Reflex » :
-// 1) L'avion réel vole dans le viseur optique avec son du vent en altitude et reflets solaires sur la carlingue.
-// 2) Le joueur tourne/glisse la BAGUE DE MISE AU POINT tactile (crans haptiques + clics mécaniques) pour rendre l'avion net.
-// 3) Au relâchement : déclic mécanique net d'obturateur + retour haptique + flash lumineux réaliste.
-// 4) Le cliché se transforme en Polaroïd, pivote en 3D pour révéler la carte et ses statistiques complètes,
-//    puis un Polaroïd avec indicateur de rareté glisse jusque dans l'onglet Collection.
+// Capture de carte SkyDex (Format Vraie Carte Verticale 5:7 Full-Art inspiré de Kyara) :
+// 1) La vraie carte verticale apparaît à l'écran avec l'avion en vol dans sa fenêtre Full-Art.
+// 2) Le joueur ajuste la bague de mise au point (ou maintient le déclencheur) pour cadrer et rendre l'avion net dans la carte.
+// 3) Déclic mécanique net + retour haptique + flash lumineux -> l'avion se fige dans la carte collector.
+// 4) La carte pivote en 3D pour révéler ses statistiques complètes, puis une vraie carte miniature glisse vers l'onglet Collection.
 import { RARITIES, ART_MAP, planeSVG } from './catalog.js';
 import { state, save, owned, addCard, addXP, levelInfo, missionEvent } from './state.js';
-import { cardHTML, cardBackHTML, cardArtSVG, attachSpinner } from './cards.js';
-import { sfx, startWindAmbience, stopWindAmbience, vibrate, burst, RAINBOW } from './fx.js';
+import { cardHTML, cardBackHTML, cardArtSVG, attachSpinner, liveryOf, serialOf, kindOf } from './cards.js';
+import { sfx, startWindAmbience, stopWindAmbience, vibrate, burst } from './fx.js';
 import { $, $$, wait, toast, esc, iconSVG } from './ui.js';
 import { FC, FA, fictionAirline, fictionCallsign } from './brand.js';
 
-export const CATCH_RATE = { common: .97, uncommon: .92, rare: .85, epic: .75, legendary: .62 };
+export const CATCH_RATE = { common: .98, uncommon: .94, rare: .88, epic: .80, legendary: .70 };
 export const MAX_ATTEMPTS = 3;
 export const CAUGHT_COOLDOWN = 6 * 3600 * 1000;
 
-export const THROW_BONUS = { excellent: 0.58, great: 0.34, nice: 0.12 };
-const THROW_LABEL = { excellent: 'MISE AU POINT PARFAITE !', great: 'NETTETÉ OPTIMALE !', nice: 'CLICHÉ VALIDÉ !' };
+export const THROW_BONUS = { excellent: 0.65, great: 0.40, nice: 0.18 };
+const THROW_LABEL = { excellent: 'CADRAGE PARFAIT', great: 'MISE AU POINT NETTE', nice: 'CARTE CAPTURÉE' };
 const STARS = { excellent: '★★★', great: '★★☆', nice: '★☆☆' };
 
 export function canCatchAgain(f) {
@@ -26,54 +25,53 @@ export function canCatchAgain(f) {
 
 const attempts = {};
 
-function viewfinderPlaneHTML(model, f) {
+function liveCardArtHTML(model, f) {
   const art = !model.generic && ART_MAP[model.id];
   const airlineDisp = fictionAirline(f.airline, f.callsign);
   const callsignDisp = fictionCallsign(f.callsign);
   if (art) {
     const style = art.filter ? ` style="filter:${art.filter}"` : '';
-    return `<div class="vf-art-wrap">
-      <img class="vf-art-img" src="${art.src}" alt="${esc(model.name)}" draggable="false"${style}>
-      <div class="vf-carlingue-glint"></div>
-      <div class="vf-art-tint"></div>
+    return `<div class="vc-art-wrap">
+      <img class="vc-art-img" src="assets/planes/${art.src}" alt="${esc(model.name)}" draggable="false"${style}>
+      <div class="vc-glint"></div>
     </div>`;
   }
-  return `<div class="vf-art-wrap vf-art-svg">
+  return `<div class="vc-art-wrap">
     ${cardArtSVG(model, { airline: airlineDisp, callsign: callsignDisp })}
-    <div class="vf-carlingue-glint"></div>
+    <div class="vc-glint"></div>
   </div>`;
 }
 
-/** Fait glisser un Polaroïd avec indicateur de rareté depuis la scène jusque dans le bouton Collection. */
-function flyPolaroidToCollection(model, r, f, fromRect) {
+/** Fait glisser une vraie carte verticale miniature jusque dans le bouton Collection. */
+function flyCardToCollection(model, r, f, fromRect) {
   const tabBtn = $('#tab-collection');
   if (!tabBtn || !fromRect) return;
   const toRect = tabBtn.getBoundingClientRect();
-  const pol = document.createElement('div');
-  pol.className = 'flying-polaroid';
-  pol.style.setProperty('--rc', r.color);
-  pol.style.left = (fromRect.left + fromRect.width / 2 - 48) + 'px';
-  pol.style.top = (fromRect.top + fromRect.height / 2 - 60) + 'px';
-  pol.innerHTML = `
-    <div class="fp-photo">${viewfinderPlaneHTML(model, f)}</div>
-    <div class="fp-foot">
-      <span class="fp-rar" style="background:${r.color}">${esc(r.label.toUpperCase())}</span>
+  const mini = document.createElement('div');
+  mini.className = 'flying-card-mini';
+  mini.style.setProperty('--rc', r.color);
+  mini.style.left = (fromRect.left + fromRect.width / 2 - 46) + 'px';
+  mini.style.top = (fromRect.top + fromRect.height / 2 - 66) + 'px';
+  mini.innerHTML = `
+    <div class="fcm-art">${liveCardArtHTML(model, f)}</div>
+    <div class="fcm-plate">
+      <span class="fcm-rar" style="background:${r.color}">${esc(r.code)}</span>
       <b class="mono">${esc(model.code || model.id)}</b>
     </div>`;
-  document.body.appendChild(pol);
+  document.body.appendChild(mini);
 
   const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
   const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
 
   sfx('slideToHangar');
-  const anim = pol.animate([
-    { transform: 'translate(0, 0) scale(1) rotate(-4deg)', opacity: 1 },
-    { transform: `translate(${dx * 0.45}px, ${dy * 0.25 - 65}px) scale(0.82) rotate(8deg)`, opacity: 1, offset: 0.48 },
-    { transform: `translate(${dx}px, ${dy}px) scale(0.18) rotate(16deg)`, opacity: 0.15 },
-  ], { duration: 760, easing: 'cubic-bezier(.22, .9, .32, 1)', fill: 'forwards' });
+  const anim = mini.animate([
+    { transform: 'translate(0, 0) scale(1) rotate(-3deg)', opacity: 1 },
+    { transform: `translate(${dx * 0.45}px, ${dy * 0.25 - 60}px) scale(0.84) rotate(6deg)`, opacity: 1, offset: 0.48 },
+    { transform: `translate(${dx}px, ${dy}px) scale(0.18) rotate(12deg)`, opacity: 0.15 },
+  ], { duration: 740, easing: 'cubic-bezier(.22, .9, .32, 1)', fill: 'forwards' });
 
   anim.onfinish = () => {
-    pol.remove();
+    mini.remove();
     tabBtn.classList.remove('catch-pop'); void tabBtn.offsetWidth;
     tabBtn.classList.add('catch-pop');
     vibrate([25, 30, 50]);
@@ -100,71 +98,87 @@ export async function openEncounter(f, ctx) {
 
   let blocked = '';
   if (already) blocked = 'Déjà capturé sur ce vol · reviens plus tard';
-  else if (!ctx.inRange) blocked = `Trop loin (${Math.round(ctx.distKm)} km) · portée ${ctx.rangeKm} km`;
+  else if (!ctx.inRange) blocked = `Hors de ta zone (${Math.round(ctx.distKm)} km) · rayon actif ${ctx.rangeKm} km`;
 
   const routeStr = f.from && f.to ? `${f.from.code} → ${f.to.code}` : '';
-  const baseRate = state.stats.captures < 3 ? 1 : (CATCH_RATE[model.rarity] ?? 0.85);
+  const baseRate = state.stats.captures < 3 ? 1 : (CATCH_RATE[model.rarity] ?? 0.88);
   const rarityTag = r.label.toUpperCase();
   const flStr = `FL${Math.max(10, Math.round((f.alt || 32000) / 100))}`;
-  const spdStr = `${Math.round(f.gs || 440)} KT`;
-  const hdgStr = `${String(Math.round(f.track || 0)).padStart(3, '0')}°`;
+  const spdStr = `${Math.round((f.gs || 440) * 1.852)} KM/H`;
   const distStr = `${Math.max(1, Math.round(ctx.distKm || 12))} KM`;
-
-  const ticksHTML = Array.from({ length: 36 }, (_, i) =>
-    `<i style="--ti:${i}" class="${i % 3 === 0 ? 'maj' : ''}"></i>`).join('');
+  const liv = liveryOf(FA(f), model);
+  const serial = String(serialOf(model.id)).padStart(3, '0');
 
   ov.innerHTML = `
     <button class="enc-flee" id="enc-back" aria-label="Retour au radar">✕</button>
     ${ctx.infoHTML ? '<button class="enc-infobtn" id="enc-infobtn" aria-label="Infos du vol">i</button>' : ''}
     <div class="enc-top">
-      <div class="enc-rarity">${rarityTag}${isNew ? '<em>NOUVEAU</em>' : ''}</div>
+      <div class="enc-rarity"><span class="er-dot" style="background:${r.color}"></span>${rarityTag}${isNew ? '<em>NOUVELLE CARTE</em>' : ''}</div>
       <h2>${esc(model.name)}</h2>
-      <div class="enc-sub mono">${esc(FC(f))}${f.airline ? ' · ' + esc(FA(f)) : ''}${routeStr ? ' · ' + esc(routeStr) : ''} · ${flStr}</div>
+      <div class="enc-sub mono">${esc(FC(f))}${f.airline ? ' · ' + esc(FA(f)) : ''}${routeStr ? ' · ' + esc(routeStr) : ''} · ${ distStr }</div>
     </div>
-    <div class="enc-stage" id="enc-stage" style="--ec:${r.color};--rc:${r.color};--lk:0;--blur:6.5px">
-      <!-- PHASE 1 : Viseur optique reflex + Bague de mise au point autour de l'objectif (identique pour toutes les raretés) -->
+
+    <div class="enc-stage" id="enc-stage" style="--ec:${r.color};--rc:${r.color};--lk:0;--blur:5.5px">
+      <!-- PHASE 1 : VRAIE CARTE VERTICALE (Ratio 5:7) EN COURS DE CADRAGE -->
       <div class="enc-vf" id="enc-vf">
-        <div class="vf-lens">
-          <div class="vf-sky">
-            <div class="vf-speedlines"></div>
-            <div class="vf-cloud c1"></div>
-            <div class="vf-cloud c2"></div>
-            <div class="vf-ladder"><i></i><i></i><i></i></div>
-          </div>
-          <div class="vf-plane-rig" id="vf-rig">
-            ${viewfinderPlaneHTML(model, f)}
-            <div class="vf-contrail t1"></div>
-            <div class="vf-contrail t2"></div>
-            <div class="vf-plane-sil">${planeSVG(model)}</div>
-          </div>
-          <div class="vf-outer-ring" id="vf-outer-ring" aria-hidden="true">${ticksHTML}</div>
-          <div class="vf-iris" id="vf-iris"></div>
-          <div class="vf-hud-top mono">
-            <span>1/2000s · f/4.0 · ISO 100</span>
-            <span id="vf-zoom">FOCUS 0%</span>
-          </div>
-          <div class="vf-reticle" id="enc-reticle">
-            <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
-            <div class="vf-ring"></div>
-            <div class="vf-cross"></div>
-            <span class="vf-lock-pct mono" id="vf-pct">MISE AU POINT REQUISE</span>
-          </div>
-          <div class="vf-hud-bot mono">
-            <span>${flStr}</span>
-            <span>${spdStr}</span>
-            <span>CAP ${hdgStr}</span>
-            <span>${distStr}</span>
-          </div>
-          <div class="vf-polaroid-frame" id="vf-polaroid">
-            <div class="vfp-meta">
-              <span class="vfp-rar" style="background:${r.color}">${esc(r.label.toUpperCase())}</span>
-              <b class="mono">${esc(FC(f))} · ${esc(model.code || model.id)}</b>
+        <div class="vcard-viewfinder" style="--rc:${r.color};--lc1:${liv.c1};--lc2:${liv.c2}">
+          <div class="vcv-inner">
+            <!-- Ciel et avion en mouvement dans la carte verticale -->
+            <div class="vcv-art">
+              <div class="vf-plane-rig" id="vf-rig">
+                ${liveCardArtHTML(model, f)}
+              </div>
+              <div class="vcv-shade"></div>
+            </div>
+
+            <!-- En-tête de la carte verticale -->
+            <div class="kyara-top-overlay">
+              <div class="kyara-top-row">
+                <span class="kyara-rar-pill">
+                  <i class="kr-dot" style="background:${r.color}"></i>
+                  <b>${rarityTag}</b>
+                </span>
+                <span class="kyara-serial mono">#${serial}</span>
+              </div>
+              <div class="kyara-livery-row">
+                <div class="c-livery-pill">
+                  <span class="c-livery-tail"></span>
+                  <span class="c-livery-name">${esc(liv.label)}</span>
+                </div>
+                <span class="c-flight-pill mono">${esc(FC(f))}</span>
+              </div>
+            </div>
+
+            <!-- Cadre de mise au point optique au centre de la carte verticale -->
+            <div class="vf-reticle" id="enc-reticle">
+              <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+              <div class="vf-ring"></div>
+              <div class="vf-cross"></div>
+              <span class="vf-lock-pct mono" id="vf-pct">CADRAGE REQUIS</span>
+            </div>
+
+            <!-- Plaque inférieure de la carte verticale -->
+            <div class="kyara-plate">
+              <div class="kp-livery-accent"></div>
+              <div class="kp-head">
+                <div class="kp-titles">
+                  <span class="kp-kicker">${esc(routeStr ? `${liv.label} · ${routeStr}` : `${model.maker} · ${kindOf(model)}`)}</span>
+                  <h3 class="kp-name">${esc(model.name)}</h3>
+                </div>
+                <span class="kp-icao mono">${esc(model.code || model.id)}</span>
+              </div>
+              <div class="kp-stats mono">
+                <div class="kp-stat"><small>ALTITUDE</small><b>${flStr}</b></div>
+                <div class="kp-stat"><small>VITESSE</small><b>${spdStr}</b></div>
+                <div class="kp-stat"><small>NETTETÉ</small><b id="vf-zoom">18%</b></div>
+              </div>
             </div>
           </div>
+          <div class="vf-iris" id="vf-iris"></div>
         </div>
       </div>
 
-      <!-- PHASE 2 : Carte 3D holographique + statistiques complètes -->
+      <!-- PHASE 2 : CARTE COLLECTOR 3D INTERACTIVE (Ratio 5:7) -->
       <div class="enc-card-persp" id="enc-card-persp">
         <div class="enc-card-3d" id="enc-card">
           <div class="showcase-3d-card" id="enc-spin">
@@ -190,29 +204,29 @@ export async function openEncounter(f, ctx) {
 
     <div class="cap-locks" id="cap-locks">
       <i data-step="1">01 · CADRAGE</i>
-      <i data-step="2">02 · MISE AU POINT</i>
-      <i data-step="3">03 · DÉCLIC</i>
+      <i data-step="2">02 · NETTETÉ</i>
+      <i data-step="3">03 · CAPTURE</i>
     </div>
 
     <div class="enc-actions" id="enc-actions">
       ${blocked
         ? `<div class="enc-blocked-msg">${blocked}</div>`
         : `<div class="focus-zone" id="focus-zone">
-            <div class="shutter-hint" id="shutter-hint">GLISSE la <b>bague de mise au point</b> sur le repère doré puis <b>RELÂCHE</b></div>
-            <div class="focus-ring-ctrl" id="focus-dial" role="slider" aria-label="Bague de mise au point optique">
+            <div class="shutter-hint" id="shutter-hint">Glisse la <b>bague de mise au point</b> dans la zone <b>NET ★</b> puis relâche pour capturer la carte</div>
+            <div class="focus-ring-ctrl" id="focus-dial" role="slider" aria-label="Bague de mise au point">
               <div class="frc-scale mono">
-                <span>35mm</span><span>50mm</span><span>85mm</span><span>135mm</span><span>200mm</span><span>∞</span>
+                <span>FLOU</span><span>CADRAGE</span><span>NET ★</span><span>INFINI</span>
               </div>
               <div class="frc-track">
                 <div class="frc-knurl"></div>
-                <div class="frc-sweet" id="frc-sweet"><span>AF ★</span></div>
+                <div class="frc-sweet" id="frc-sweet"><span>NET ★</span></div>
                 <div class="frc-thumb" id="frc-thumb">
                   <i></i><i></i><i></i>
-                  <span class="mono" id="frc-val">50mm</span>
+                  <span class="mono" id="frc-val">18%</span>
                 </div>
               </div>
             </div>
-            <div class="beacon-rate mono" id="shutter-rate">NETTETÉ <b id="sharp-pct">18%</b> · RELÂCHE QUAND L'AVION EST NET</div>
+            <div class="beacon-rate mono" id="shutter-rate">NETTETÉ <b id="sharp-pct">18%</b> · RELÂCHE POUR PRENDRE LA CARTE</div>
           </div>`}
     </div>`;
 
@@ -230,9 +244,8 @@ export async function openEncounter(f, ctx) {
   }
 
   const stage = $('#enc-stage', ov), card = $('#enc-card', ov), vf = $('#enc-vf', ov), rig = $('#vf-rig', ov);
-  const outerRing = $('#vf-outer-ring', ov);
   const locksBox = $('#cap-locks', ov), locks = $$('i', locksBox);
-  const spinner = attachSpinner($('#enc-spin', ov), { speed: 46, paused: true });
+  const spinner = attachSpinner($('#enc-spin', ov), { speed: 44, paused: true });
 
   if (blocked) {
     stage.classList.add('live', 'card-mode');
@@ -257,40 +270,35 @@ export async function openEncounter(f, ctx) {
   $('#enc-back').onclick = () => { if (busy) return; sfx('tap'); close(); };
   if (blocked) return;
 
-  // ------------------------------------------------------------ Bague de mise au point tactile + Reflets carlingue
   const dial = $('#focus-dial', ov), sweetEl = $('#frc-sweet', ov), thumbEl = $('#frc-thumb', ov);
   const valEl = $('#frc-val', ov), sharpEl = $('#sharp-pct', ov);
   const pctEl = $('#vf-pct', ov), zoomEl = $('#vf-zoom', ov);
 
-  // Mise au point optique et comportement du viseur strictement identiques pour toutes les catégories
-  const TOL = 0.13;
-  let targetF = 0.64 + (Math.random() * 0.16 - 0.08); // position idéale entre 0.56 et 0.72
-  let curF = 0.12;                                     // position initiale de la bague (floue)
-  let dragging = false, startX = 0, startF = 0, lastDetent = Math.round(curF * 32), wasInZone = false;
+  const TOL = 0.14;
+  let targetF = 0.64 + (Math.random() * 0.14 - 0.07);
+  let curF = 0.14;
+  let dragging = false, startX = 0, startF = 0, lastDetent = Math.round(curF * 30), wasInZone = false;
 
   function renderFocusState() {
     const dist = Math.abs(curF - targetF);
     const sharpness = Math.max(0, Math.min(1, 1 - dist / 0.55));
     const inZ = dist <= TOL;
     const nearZ = dist <= TOL * 1.85;
-    // Flou optique réel sur l'avion tant que la mise au point n'est pas faite
-    const blurPx = inZ ? 0 : Math.max(0.4, ((dist - TOL * 0.5) * 14));
+    const blurPx = inZ ? 0 : Math.max(0.3, ((dist - TOL * 0.45) * 12));
 
     stage.style.setProperty('--lk', sharpness.toFixed(3));
     stage.style.setProperty('--blur', blurPx.toFixed(2) + 'px');
-    if (outerRing) outerRing.style.transform = `rotate(${(curF * 220 - 110).toFixed(1)}deg)`;
     if (thumbEl) thumbEl.style.left = (curF * 100).toFixed(1) + '%';
     if (sweetEl) {
       sweetEl.style.left = ((targetF - TOL) * 100).toFixed(1) + '%';
       sweetEl.style.width = (TOL * 200).toFixed(1) + '%';
     }
-    const mm = Math.round(35 + curF * 165);
-    if (valEl) valEl.textContent = `${mm}mm`;
     const spPct = Math.round(sharpness * 100);
+    if (valEl) valEl.textContent = `${spPct}%`;
     if (sharpEl) sharpEl.textContent = `${spPct}%`;
-    if (zoomEl) zoomEl.textContent = `FOCUS ${spPct}% · ${mm}MM`;
+    if (zoomEl) zoomEl.textContent = `${spPct}%`;
     if (pctEl) {
-      pctEl.textContent = inZ ? '● AF NET · RELÂCHE !' : nearZ ? 'PRESQUE NET…' : 'FLOU · TOURNE LA BAGUE';
+      pctEl.textContent = inZ ? '● CARTE NETTE · RELÂCHE !' : nearZ ? 'PRESQUE CADRÉ…' : 'GLISSE POUR CADRER';
     }
 
     locks[0]?.classList.toggle('on', sharpness >= 0.45);
@@ -309,19 +317,18 @@ export async function openEncounter(f, ctx) {
     }
   }
 
-  // Mouvement de vol fluide dans le viseur (identique pour toutes les raretés)
   let driftRaf = 0;
   const driftLoop = now => {
     if (closed || !rig.isConnected) return;
     if (!stage.classList.contains('card-mode')) {
       const dist = Math.abs(curF - targetF);
       const sharp = Math.max(0, Math.min(1, 1 - dist / 0.55));
-      const amp = (1 - sharp * 0.82) * 10;
+      const amp = (1 - sharp * 0.85) * 11;
       const spd = 0.0018;
-      const dx = Math.sin(now * spd) * amp + Math.cos(now * spd * 1.6) * (amp * 0.35);
-      const dy = Math.cos(now * spd * 1.25) * (amp * 0.6);
-      const bank = Math.sin(now * spd * 1.1) * 4 * (1 - sharp * 0.75);
-      rig.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${bank.toFixed(1)}deg) scale(${(1 + sharp * 0.12).toFixed(3)})`;
+      const dx = Math.sin(now * spd) * amp;
+      const dy = Math.cos(now * spd * 1.25) * (amp * 0.65);
+      const bank = Math.sin(now * spd * 1.1) * 3.5 * (1 - sharp * 0.8);
+      rig.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${bank.toFixed(1)}deg) scale(${(1.02 + sharp * 0.08).toFixed(3)})`;
     }
     driftRaf = requestAnimationFrame(driftLoop);
   };
@@ -338,7 +345,6 @@ export async function openEncounter(f, ctx) {
     stage.classList.add('locking');
     dial.classList.add('held');
     $('#shutter-hint')?.classList.add('gone');
-    // Si on touche directement la piste de la bague, on se place sous le doigt
     const rect = dial.getBoundingClientRect();
     if (e.currentTarget === dial && rect.width > 0) {
       curF = Math.max(0.04, Math.min(0.96, (e.clientX - rect.left) / rect.width));
@@ -358,7 +364,7 @@ export async function openEncounter(f, ctx) {
       const dx = e.clientX - startX;
       curF = Math.max(0.04, Math.min(0.96, startF + dx / (span * 0.85)));
     }
-    const detent = Math.round(curF * 34);
+    const detent = Math.round(curF * 30);
     if (detent !== lastDetent) {
       lastDetent = detent;
       sfx('focusClick');
@@ -372,13 +378,12 @@ export async function openEncounter(f, ctx) {
     dragging = false;
     dial.classList.remove('held');
     const dist = Math.abs(curF - targetF);
-    // Si le joueur relâche encore très loin de la zone dès le tout début, on le laisse ajuster
-    if (dist > TOL * 2.6 && curF < 0.25) {
+    if (dist > TOL * 2.6 && curF < 0.24) {
       stage.classList.remove('locking');
       const h = $('#shutter-hint', ov);
       if (h) {
         h.classList.remove('gone', 'nudge'); void h.offsetWidth;
-        h.innerHTML = 'Amène la <b>bague de mise au point</b> dans la zone <b>AF ★</b> pour déclencher !';
+        h.innerHTML = 'Glisse le curseur dans le repère <b>NET ★</b> pour capturer la carte !';
         h.classList.add('nudge');
       }
       return;
@@ -393,7 +398,6 @@ export async function openEncounter(f, ctx) {
     stage.classList.remove('locking');
   };
 
-  // La bague tactile ET le viseur permettent de tourner la mise au point
   [dial, vf].forEach(el => {
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointermove', onMove);
@@ -408,7 +412,6 @@ export async function openEncounter(f, ctx) {
     const quality = dist <= TOL ? 'excellent' : dist <= TOL * 1.9 ? 'great' : 'nice';
     dial.classList.add('disabled');
 
-    // Netteté instantanée au déclic + fermeture rapide du diaphragme + flash lumineux réaliste
     stage.style.setProperty('--blur', '0px');
     sfx('shutter');
     vibrate([35, 20, 75]);
@@ -417,7 +420,7 @@ export async function openEncounter(f, ctx) {
     const flashEl = document.createElement('div');
     flashEl.className = 'cam-flash';
     ov.appendChild(flashEl);
-    setTimeout(() => flashEl.remove(), 580);
+    setTimeout(() => flashEl.remove(), 520);
 
     const qEl = $('#throw-quality', ov);
     qEl.textContent = THROW_LABEL[quality];
@@ -426,7 +429,7 @@ export async function openEncounter(f, ctx) {
 
     const vR = vf.getBoundingClientRect();
     const cx = vR.left + vR.width / 2, cy = vR.top + vR.height / 2;
-    burst(cx, cy, ['#eceff4', '#d6a648'], 18, 0.8);
+    burst(cx, cy, ['#f8fafc', r.color], 18, 0.8);
 
     await resolveCapture(quality, cx, cy, vR);
   }
@@ -441,8 +444,8 @@ export async function openEncounter(f, ctx) {
     for (let i = 0; i < checks; i++) {
       vf.classList.remove('vf-pulse'); void vf.offsetWidth; vf.classList.add('vf-pulse');
       locks[i].classList.add('on');
-      sfx('shake' + (i + 1)); vibrate(40);
-      await wait(380);
+      sfx('shake' + (i + 1)); vibrate(35);
+      await wait(320);
     }
     vf.classList.remove('vf-pulse');
     $('#throw-quality', ov).className = 'throw-quality';
@@ -451,16 +454,15 @@ export async function openEncounter(f, ctx) {
       stopWindAmbience();
       locks.forEach(l => l.classList.add('win'));
       sfx('lock');
-      await wait(160);
+      await wait(140);
 
-      // Développement du Polaroïd puis pivot 3D vers la Carte et ses statistiques
       sfx('polaroid');
       stage.classList.add('developing');
-      await wait(540);
+      await wait(440);
 
       const flash = document.createElement('div'); flash.className = 'flash'; ov.appendChild(flash);
-      burst(cx, cy, [r.color, '#eceff4', '#d6a648'], 28, 0.9);
-      sfx('success'); vibrate([80, 40, 150]);
+      burst(cx, cy, [r.color, '#f8fafc', '#f59e0b'], 26, 0.9);
+      sfx('success'); vibrate([70, 35, 130]);
 
       const beforeLv = levelInfo();
       const res = addCard(model, { callsign: f.callsign, reg: f.reg, airline: f.airline, route: routeStr, alt: f.alt, speed: f.gs });
@@ -472,7 +474,7 @@ export async function openEncounter(f, ctx) {
       const qualityMult = quality === 'excellent' ? 1.5 : quality === 'great' ? 1.2 : 1;
       const xpGain = Math.round((res.isNew ? r.xp : Math.ceil(r.xp / 2)) * qualityMult);
       state.stats.combo = (state.stats.combo || 0) + 1;
-      if (state.stats.combo >= 2) setTimeout(() => sfx('combo'), 260);
+      if (state.stats.combo >= 2) setTimeout(() => sfx('combo'), 240);
       const comboBonus = Math.min(state.stats.combo - 1, 5) * 5;
       const coinGain = Math.round(10 * (r.order + 1) * qualityMult) + comboBonus;
       state.coins += coinGain;
@@ -484,40 +486,39 @@ export async function openEncounter(f, ctx) {
       locksBox.hidden = true;
       ctx.onCaught && ctx.onCaught(f);
 
-      // Le Polaroïd avec son indicateur de rareté glisse jusque dans la collection !
-      setTimeout(() => flyPolaroidToCollection(model, r, f, vR), 420);
+      setTimeout(() => flyCardToCollection(model, r, f, vR), 380);
 
       showSummary(res, xpGain, coinGain, lv, quality, state.stats.combo, beforeLv, afterLv, vR);
     } else {
       locks.forEach(l => l.classList.add('fail'));
-      sfx('fail'); vibrate(200);
-      burst(cx, cy, ['#ef4444', '#fff'], 26, 0.8);
+      sfx('fail'); vibrate(180);
+      burst(cx, cy, ['#ef4444', '#fff'], 20, 0.8);
       vf.classList.add('vf-glitch');
       const left = MAX_ATTEMPTS - attempts[f.id];
       const qEl = $('#throw-quality', ov);
-      qEl.textContent = left > 0 ? 'MISE AU POINT RATÉE !' : 'PERDU DANS LES NUAGES…';
+      qEl.textContent = left > 0 ? 'CADRAGE MANQUÉ' : 'AVION HORS DE PORTÉE';
       qEl.className = 'throw-quality show q-fail';
-      await wait(850);
+      await wait(780);
       vf.classList.remove('vf-glitch');
       $('#vf-iris', ov)?.classList.remove('blink');
       qEl.className = 'throw-quality';
       if (left > 0) {
         stage.classList.remove('snapped', 'developing', 'locking');
         curF = 0.14;
-        targetF = 0.58 + Math.random() * 0.24;
+        targetF = 0.58 + Math.random() * 0.22;
         renderFocusState();
         dial.classList.remove('disabled');
         $('#shutter-hint').classList.remove('gone');
-        $('#shutter-hint').innerHTML = `ENCORE ${left} ESSAI${left > 1 ? 'S' : ''} · Aligne la bague sur <b>AF ★</b>`;
+        $('#shutter-hint').innerHTML = `Encore ${left} essai${left > 1 ? 's' : ''} · Aligne la bague sur <b>NET ★</b>`;
         busy = false;
       } else {
         stopWindAmbience();
         vf.classList.add('vf-escape');
-        await wait(650);
+        await wait(600);
         delete attempts[f.id]; state.stats.combo = 0;
         state.caught[f.id] = Date.now() - CAUGHT_COOLDOWN + 10 * 60 * 1000;
         save();
-        toast('L\'avion est sorti du viseur');
+        toast('L\'avion a quitté le cadre');
         ctx.onFled && ctx.onFled(f);
         busy = false;
         close();
@@ -528,21 +529,19 @@ export async function openEncounter(f, ctx) {
   function showSummary(res, xpGain, coinGain, lv, quality, combo, beforeLv, afterLv, vR) {
     ov.classList.add('caught');
     $('.enc-top', ov).innerHTML = `
-      <div class="enc-rarity">${res.isNew ? 'NOUVEAU CLICHÉ HOMOLOGUÉ' : `OBSERVATION ARCHIVÉE · ×${res.count}`}</div>
+      <div class="enc-rarity"><span class="er-dot" style="background:${r.color}"></span>${res.isNew ? 'NOUVELLE CARTE AJOUTÉE' : `CARTE AMÉLIORÉE · ×${res.count}`}</div>
       <h2>${esc(model.name)}</h2>
       <div class="enc-sub mono"><span class="sum-stars">${STARS[quality]}</span> ${THROW_LABEL[quality]} · ${esc(FC(f))}</div>`;
 
-    // Pivot 3D de la carte pour révéler les statistiques complètes
     stage.classList.remove('vf-mode', 'snapped', 'locking', 'inzone', 'developing');
     stage.classList.add('live', 'won', 'card-mode');
     card.className = 'enc-card-3d polaroid-in';
-    spinner.resume(); spinner.setSpeed(38); spinner.boost(780);
+    spinner.resume(); spinner.setSpeed(36); spinner.boost(740);
     setTimeout(() => {
       if (!card.isConnected) return;
       card.classList.remove('polaroid-in');
-      // S'arrête de face après une rotation 3D complète pour laisser lire les statistiques
-      spinner.faceFront(620);
-    }, 950);
+      spinner.faceFront(600);
+    }, 900);
 
     const pct0 = Math.round((beforeLv.cur / beforeLv.need) * 100);
     const pct1 = Math.round((afterLv.cur / afterLv.need) * 100);
@@ -555,27 +554,27 @@ export async function openEncounter(f, ctx) {
 
     $('#enc-actions', ov).innerHTML = `
       <div class="win-toolbar">
-        <button class="btn-pill dark sm" id="enc-flip-3d">↻ Pivoter la carte 3D (Dos / Stats)</button>
+        <button class="btn-pill dark sm" id="enc-flip-3d">↻ Tourner la carte 3D (Recto / Verso)</button>
       </div>
       <div class="win-chips">${chips}</div>
       <div class="win-xp-box">
         <div class="win-xp-head mono">
-          <span>FL ${afterLv.lvl} ${lv ? '· <b>NIVEAU SUPÉRIEUR !</b>' : ''}</span>
+          <span>NIVEAU ${afterLv.lvl} ${lv ? '· <b>NIVEAU SUPÉRIEUR !</b>' : ''}</span>
           <span>${afterLv.cur} / ${afterLv.need} XP</span>
         </div>
         <div class="win-xp-bar"><i id="win-xp-fill" style="width:${lv ? 0 : pct0}%"></i></div>
       </div>
       <div class="win-btns">
-        <button class="btn gold block" id="enc-ok">Classer &amp; continuer</button>
-        <button class="btn ghost block" id="enc-col">Ouvrir ma collection</button>
+        <button class="btn gold block" id="enc-ok">Continuer la chasse</button>
+        <button class="btn ghost block" id="enc-col">Voir ma collection</button>
       </div>`;
 
     let spinning = false;
     $('#enc-flip-3d', ov).onclick = () => {
       sfx('flip');
       spinning = !spinning;
-      if (spinning) { spinner.resume(); spinner.setSpeed(54); spinner.boost(620); }
-      else { spinner.faceFront(480); }
+      if (spinning) { spinner.resume(); spinner.setSpeed(52); spinner.boost(600); }
+      else { spinner.faceFront(460); }
     };
 
     requestAnimationFrame(() => {
@@ -587,12 +586,12 @@ export async function openEncounter(f, ctx) {
 
     if (lv) {
       sfx('levelup');
-      toast(`FL ${lv.levelUp} atteint · +${lv.coins} CR${lv.pack ? ' + 1 Booster' : ''}`, 'gold', 4000);
+      toast(`Niveau ${lv.levelUp} atteint · +${lv.coins} CR${lv.pack ? ' + 1 Pack' : ''}`, 'gold', 4000);
     }
     $('#enc-ok').onclick = () => {
       sfx('tap');
       const cRect = card.getBoundingClientRect();
-      flyPolaroidToCollection(model, r, f, cRect.width ? cRect : vR);
+      flyCardToCollection(model, r, f, cRect.width ? cRect : vR);
       close();
     };
     $('#enc-col').onclick = () => { close(); document.querySelector('[data-tab=collection]').click(); };

@@ -1,5 +1,5 @@
 // Flux de vols : données ADS-B réelles (adsb.lol) avec bascule automatique sur une simulation réaliste.
-import { MODERN, HISTORIC, RARITIES, getModel } from './catalog.js';
+import { MODERN, HISTORIC, RARITIES, BY_ID, getModel } from './catalog.js';
 import { state } from './state.js';
 
 // Relais du jeu (server.py ou fonction serverless) : contourne le blocage CORS et partage le cache entre joueurs.
@@ -291,34 +291,79 @@ export class FlightFeed {
 
   async fetchArea(lat, lon, nm) {
     const ctl = new AbortController();
-    const to = setTimeout(() => ctl.abort(), 15000);
+    const to = setTimeout(() => ctl.abort(), 12000);
+    const distNm = Math.round(nm);
     try {
-      let r = null;
+      // 1. Relais local (server.py)
       if (this.relayOk) {
-        r = await fetch(`${RELAY}/flights?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&dist=${Math.round(nm)}`, { signal: ctl.signal, cache: 'no-store' });
-        if (r.status === 404) { this.relayOk = false; r = null; }   // hébergement sans relais
+        try {
+          const r = await fetch(`${RELAY}/flights?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&dist=${distNm}`, { signal: ctl.signal, cache: 'no-store' });
+          if (r.status === 404) {
+            this.relayOk = false;
+          } else if (r.ok) {
+            const data = await r.json();
+            const list = data.ac || data.aircraft || [];
+            if (Array.isArray(list)) return list;
+          }
+        } catch (_) {
+          this.relayOk = false;
+        }
       }
-      if (!r) r = await fetch(`${API}/v2/point/${lat.toFixed(3)}/${lon.toFixed(3)}/${Math.round(nm)}`, { signal: ctl.signal });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const data = await r.json();
-      return data.ac || [];
+
+      // 2. Sources ADS-B directes (adsb.fi, airplanes.live, adsb.lol)
+      const directUrls = [
+        `https://opendata.adsb.fi/api/v2/lat/${lat.toFixed(3)}/lon/${lon.toFixed(3)}/dist/${distNm}`,
+        `https://api.airplanes.live/v2/point/${lat.toFixed(3)}/${lon.toFixed(3)}/${distNm}`,
+        `${API}/v2/point/${lat.toFixed(3)}/${lon.toFixed(3)}/${distNm}`,
+      ];
+      for (const url of directUrls) {
+        try {
+          const r = await fetch(url, { signal: ctl.signal });
+          if (r.ok) {
+            const data = await r.json();
+            const list = data.ac || data.aircraft;
+            if (Array.isArray(list)) return list;
+          }
+        } catch (_) { /* essai source suivante */ }
+      }
+
+      // 3. OpenSky Network (CORS natif dans tous les navigateurs)
+      const degLat = (distNm * 1.852) / 111.32;
+      const degLon = degLat / Math.max(0.25, Math.cos(toRad(lat)));
+      const osUrl = `https://opensky-network.org/api/states/all?lamin=${(lat - degLat).toFixed(3)}&lomin=${(lon - degLon).toFixed(3)}&lamax=${(lat + degLat).toFixed(3)}&lomax=${(lon + degLon).toFixed(3)}`;
+      const osRes = await fetch(osUrl, { signal: ctl.signal });
+      if (!osRes.ok) throw new Error('HTTP ' + osRes.status);
+      const osData = await osRes.json();
+      if (!osData || !Array.isArray(osData.states)) return [];
+      return osData.states
+        .filter(s => s && s[5] != null && s[6] != null && !s[8])
+        .map(s => ({
+          hex: String(s[0] || '').trim(),
+          flight: String(s[1] || '').trim(),
+          lon: s[5],
+          lat: s[6],
+          alt_baro: s[7] != null ? Math.round(s[7] * 3.28084) : (s[13] != null ? Math.round(s[13] * 3.28084) : 32000),
+          gs: s[9] != null ? Math.round(s[9] * 1.94384) : 440,
+          track: s[10] ?? 0,
+          baro_rate: s[11] != null ? Math.round(s[11] * 196.85) : 0,
+          squawk: s[14] || '—',
+        }));
     } finally { clearTimeout(to); }
   }
 
   start() {
     this.poll();
-    setInterval(() => this.poll(), 7000);
-    setInterval(() => this.simTick(), 2000);
+    setInterval(() => this.poll(), 4500);
+    setInterval(() => this.simTick(), 1500);
   }
   async poll() {
     const forced = state.settings.mode;
     if (forced === 'sim') { this.useSim(); return; }
-    if (this.mode === 'sim' && forced === 'auto' && Date.now() - this.lastTry < 30000) { this.simTick(); return; }
+    if (this.mode === 'sim' && forced === 'auto' && Date.now() - this.lastTry < 25000) { this.simTick(); return; }
     this.lastTry = Date.now();
     try {
       const { lat, lon, nm } = this.view;
       const jobs = [this.fetchArea(lat, lon, nm)];
-      // Si le joueur regarde loin de chez lui, on suit aussi sa propre zone de capture (~50 NM)
       if (this.home && distKm(lat, lon, this.home.lat, this.home.lon) > nm * 1.852 * 0.8) jobs.push(this.fetchArea(this.home.lat, this.home.lon, 50));
       const lists = await Promise.all(jobs);
       const byHex = new Map();
@@ -329,7 +374,7 @@ export class FlightFeed {
       this.emit();
     } catch (e) {
       this.fails++; this.lastError = String(e.message || e);
-      if ((this.fails >= 2 || this.mode === 'sim' || !this.lastOk) && forced !== 'live') this.useSim();
+      if ((this.fails >= 1 || this.mode === 'sim' || !this.lastOk) && forced !== 'live') this.useSim();
     }
   }
   useSim() {
@@ -349,15 +394,37 @@ export class FlightFeed {
       let f = this.flights.get(id);
       if (!f) { f = { id, trail: [], sim: false }; this.flights.set(id, f); }
       f.callsign = (a.flight || '').trim() || a.r || id.toUpperCase();
-      f.reg = a.r || '—'; f.type = a.t || ''; f.model = getModel(a.t);
+      const air = f.callsign.slice(0, 3).toUpperCase();
+      const profile = AIRLINE_PROFILES[air];
+
+      // Si le flux ADS-B (ex: OpenSky ou trame partielle) n'indique pas le type OACI, on déduit un appareil cohérent de la flotte
+      let typeCode = (a.t || f.type || '').toUpperCase();
+      if (!typeCode || !BY_ID[typeCode]) {
+        let h = 0;
+        for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+        if (profile && profile.fleet && profile.fleet.length) {
+          typeCode = profile.fleet[h % profile.fleet.length];
+        } else {
+          const commonPool = ['A320', 'B738', 'A20N', 'A319', 'E190', 'A321', 'B38M', 'A332', 'B77W', 'B789', 'AT76', 'BCS3'];
+          typeCode = commonPool[h % commonPool.length];
+        }
+      }
+
+      f.reg = a.r || f.reg || (profile ? profile.reg() : 'F-H' + id.slice(0, 3).toUpperCase());
+      f.type = typeCode;
+      f.model = getModel(typeCode);
       f.lat = a.lat; f.lon = a.lon; f.track = a.track ?? a.true_heading ?? f.track ?? 0;
-      f.gs = a.gs ?? 0; f.alt = typeof a.alt_baro === 'number' ? a.alt_baro : (a.alt_geom ?? 0);
+      f.gs = a.gs ?? 440; f.alt = typeof a.alt_baro === 'number' ? a.alt_baro : (a.alt_geom ?? 32000);
       f.vr = a.baro_rate ?? a.geom_rate ?? 0; f.squawk = a.squawk || '—'; f.military = !!(a.dbFlags & 1);
       f.t = Date.now();
       const last = f.trail[f.trail.length - 1];
       if (!last || distKm(last[0], last[1], f.lat, f.lon) > 0.4) { f.trail.push([f.lat, f.lon]); if (f.trail.length > 40) f.trail.shift(); }
-      const air = f.callsign.slice(0, 3).toUpperCase();
-      f.airline = f.military ? 'Mission militaire' : (/^[A-Z]{3}\d/.test(f.callsign) ? (AIRLINES[air] || air) : null); // code brut si inconnu -> « XYZ-Aero » à l'affichage
+      f.airline = f.military ? 'Mission militaire' : (/^[A-Z]{3}\d/.test(f.callsign) ? (AIRLINES[air] || (profile && profile.name) || null) : null);
+      if (!f.from && profile) {
+        const rt = pickRouteFor(profile, f.model);
+        f.from = rt.from;
+        f.to = rt.to;
+      }
     }
     for (const [id, f] of this.flights) if (!f.special && !f.sim && !seen.has(id)) this.flights.delete(id);
     this.fetchRoutes();

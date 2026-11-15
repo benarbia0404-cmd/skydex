@@ -18,7 +18,7 @@
   <meta property="og:image" content="assets/icons/icon-512.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/style.css?v=21">
+  <link rel="stylesheet" href="css/style.css?v=22">
 </head>
 <body>
 <div id="app">
@@ -76,7 +76,7 @@
           <span class="search-ic">
             <svg class="ui-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/><path d="M11 8v6M8 11h6" stroke-opacity=".5"/></svg>
           </span>
-          <input id="search" placeholder="Indicatif, immat., type · AZF, Aéro-320…" autocomplete="off">
+          <input id="search" placeholder="Indicatif, compagnie, modèle · AFR, A380, B748…" autocomplete="off">
           <button id="search-clear" hidden aria-label="Effacer">✕</button>
         </div>
         <div id="search-results" class="search-results" hidden></div>
@@ -193,7 +193,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
-<script type="module" src="js/app.js?v=21"></script>
+<script type="module" src="js/app.js?v=22"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

@@ -5,7 +5,7 @@ import { posAt } from './flights.js';
 import { planeSVG } from './catalog.js';
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace';
-const GOLD = '#d49b38';
+const GOLD = '#f59e0b';
 const spriteCache = new Map();
 
 function sprite(model, color, size, onLoad) {
@@ -78,7 +78,7 @@ export class PlaneLayer {
 
   setData(items, clusters) {
     this.items = items; this.clusters = clusters;
-    this.needAnim = items.some(i => i.hi || i.special || i.sel);
+    this.needAnim = items.length > 0;
     const ids = new Set(items.map(i => i.id));
     for (const id of this.ang.keys()) if (!ids.has(id)) this.ang.delete(id);
     this.dirty = true;
@@ -88,7 +88,7 @@ export class PlaneLayer {
   loop(now) {
     requestAnimationFrame(this.loop);
     if (document.hidden) return;
-    if (!this.dirty && now - this.last < (this.needAnim ? 33 : 400)) return;
+    if (!this.dirty && now - this.last < (this.needAnim ? 40 : 400)) return;
     this.dirty = false; this.last = now;
     this.draw(now);
   }

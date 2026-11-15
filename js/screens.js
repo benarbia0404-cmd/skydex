@@ -86,10 +86,10 @@ export function renderCollection() {
   const fleetsEl = $('#col-fleets');
   if (fleetsEl) {
     const fleets = [
-      { label: 'ASTRA-AERO', filter: m => !m.historic && m.realMaker === 'Airbus' },
-      { label: 'ORION FLIGHT', filter: m => !m.historic && m.realMaker === 'Boeing' },
-      { label: 'RÉGIONAUX', filter: m => !m.historic && /Embraer|ATR|Bombardier|De Havilland|Saab|Antonov|Iliouchine|Soukhoï|COMAC|Tupolev/.test(m.realMaker) },
-      { label: 'AFFAIRES & LÉGERS', filter: m => !m.historic && /Cessna|Piper|Cirrus|Diamond|Beechcraft|Pilatus|Dassault|Gulfstream|Learjet|Lockheed|Airbus Defence/.test(m.realMaker) },
+      { label: 'AIRBUS', filter: m => !m.historic && (m.realMaker || m.maker) === 'Airbus' },
+      { label: 'BOEING', filter: m => !m.historic && (m.realMaker || m.maker) === 'Boeing' },
+      { label: 'RÉGIONAUX', filter: m => !m.historic && /Embraer|ATR|Bombardier|De Havilland|Saab|Antonov|Iliouchine|Soukhoï|COMAC|Tupolev/.test(m.realMaker || m.maker) },
+      { label: 'AFFAIRES & MILITAIRES', filter: m => !m.historic && /Cessna|Piper|Cirrus|Diamond|Beechcraft|Pilatus|Dassault|Gulfstream|Learjet|Lockheed|Airbus Defence/.test(m.realMaker || m.maker) },
       { label: 'HISTORIQUES', filter: m => m.historic },
     ];
     fleetsEl.innerHTML = fleets.map(fl => {
