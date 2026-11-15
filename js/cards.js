@@ -178,16 +178,16 @@ export function cardArtSVG(model, opts = {}) {
   const trijet = /^(DC10|MD11|L101|B721)$/.test(id);
 
   const sky = dark
-    ? ['#04060d', '#11162b', '#311b61']
+    ? ['#080c14', '#111a28', '#1e2c40']
     : model.historic
-      ? ['#120c1c', '#4c220a', '#ca7b18']
+      ? ['#141821', '#2b2623', '#6b533b']
       : r.order >= 4
-        ? ['#090714', '#2a1548', '#b45309']
+        ? ['#0b1320', '#1a2a3e', '#4f4334']
         : r.order === 3
-          ? ['#080b18', '#1e1b4b', '#581c87']
+          ? ['#0b1422', '#172a42', '#3d4d63']
           : r.order === 2
-            ? ['#060d1c', '#0c2d57', '#0284c7']
-            : ['#081020', '#122a4e', '#28527a'];
+            ? ['#0a1524', '#142c4c', '#294d78']
+            : ['#0c1624', '#162b46', '#284669'];
 
   const bodyTop = dark ? '#334155' : spit ? '#4d7c0f' : mil ? '#94a3b8' : '#f8fafc';
   const bodyBot = dark ? '#0f172a' : spit ? '#365314' : mil ? '#475569' : '#cbd5e1';
@@ -295,66 +295,47 @@ export function cardArtSVG(model, opts = {}) {
       </linearGradient>
     </defs>
     <rect width="200" height="200" fill="url(#${uid}_s)"/>
-    <!-- Halo atmosphérique de rareté -->
-    <circle cx="${model.historic ? 150 : 145}" cy="${model.historic ? 136 : 52}" r="${model.historic ? 44 : 34}" fill="${model.historic ? '#fde047' : r.color}" opacity=".22"/>
-    <!-- Nuages d'altitude stylisés -->
-    <g fill="#ffffff" opacity=".12">
-      <ellipse cx="42" cy="166" rx="55" ry="14"/>
-      <ellipse cx="155" cy="174" rx="62" ry="16"/>
-      <ellipse cx="105" cy="182" rx="70" ry="18"/>
+    <!-- Lumière atmosphérique naturelle à l'horizon -->
+    <ellipse cx="100" cy="185" rx="120" ry="42" fill="#ffffff" opacity=".06"/>
+    <!-- Nuages d'altitude subtils -->
+    <g fill="#ffffff" opacity=".08">
+      <ellipse cx="42" cy="168" rx="58" ry="12"/>
+      <ellipse cx="155" cy="175" rx="64" ry="14"/>
+      <ellipse cx="105" cy="184" rx="74" ry="15"/>
     </g>
-    <!-- Grille radar / horizon artificiel subtil -->
-    <g stroke="#ffffff" stroke-opacity=".08" stroke-width="0.7" fill="none">
-      <circle cx="100" cy="100" r="72" stroke-dasharray="3 4"/>
-      <circle cx="100" cy="100" r="46"/>
-      <line x1="0" y1="100" x2="200" y2="100" stroke-dasharray="2 6"/>
-      <line x1="100" y1="0" x2="100" y2="200" stroke-dasharray="2 6"/>
-    </g>
-    <!-- Sillage de condensation (contrails) aux couleurs de la livrée -->
-    <line x1="-10" y1="158" x2="95" y2="108" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity=".32"/>
-    <line x1="-10" y1="172" x2="80" y2="128" stroke="${stripe}" stroke-width="2.6" stroke-linecap="round" opacity=".65"/>
+    <!-- Sillage de condensation naturel -->
+    <line x1="-10" y1="158" x2="95" y2="108" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity=".24"/>
+    <line x1="-10" y1="170" x2="80" y2="128" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity=".16"/>
     ${plane}
   </svg>`;
 }
 
-/** Dos de carte : turbine de réacteur vue de face (soufflante dorée + cône à spirale), guilloché holographique. */
-function turbineSVG(uid) {
-  const blades = Array.from({ length: 22 }, (_, i) =>
-    `<path transform="rotate(${(i * 360 / 22).toFixed(2)} 100 100)" d="M97 80 C94 62 99 42 113 25 L101 23 C93 42 90 62 92.5 80.5 Z" fill="url(#${uid}_bl)"/>`).join('');
-  return `<svg class="cb-turbine" viewBox="0 0 200 200" aria-hidden="true">
-    <defs>
-      <radialGradient id="${uid}_bg" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="#1b1f2c"/><stop offset="70%" stop-color="#0a0c13"/><stop offset="100%" stop-color="#05060a"/>
-      </radialGradient>
-      <linearGradient id="${uid}_bl" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#fff4c7"/><stop offset="35%" stop-color="#e5b84b"/><stop offset="100%" stop-color="#6b4c0b"/>
-      </linearGradient>
-      <linearGradient id="${uid}_rim" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#fff1b8"/><stop offset="45%" stop-color="#c99626"/><stop offset="100%" stop-color="#5c3f08"/>
-      </linearGradient>
-      <radialGradient id="${uid}_sp" cx="38%" cy="34%" r="70%">
-        <stop offset="0%" stop-color="#ffffff"/><stop offset="60%" stop-color="#d7dbe4"/><stop offset="100%" stop-color="#7c8496"/>
-      </radialGradient>
-    </defs>
-    <circle cx="100" cy="100" r="96" fill="none" stroke="url(#${uid}_rim)" stroke-width="5"/>
-    <circle cx="100" cy="100" r="89" fill="url(#${uid}_bg)" stroke="#e5b84b" stroke-opacity=".35" stroke-width="1"/>
-    <g class="cb-fan">${blades}</g>
-    <circle cx="100" cy="100" r="82" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="5"/>
-    <circle cx="100" cy="100" r="21" fill="url(#${uid}_sp)" stroke="#0b0d14" stroke-width="1.5"/>
-    <path class="cb-spiral" d="M100 100 C 106 96, 111 103, 105 109 C 97 116, 87 106, 92 96 C 97 86, 113 87, 117 99" fill="none" stroke="#0b0d14" stroke-width="3" stroke-linecap="round"/>
+/** Dos de carte : Plaque d'identification aéronautique gravée (sobre, horlogère, sans effet arc-en-ciel). */
+function compassPlateSVG() {
+  const ticks = Array.from({ length: 36 }, (_, i) => {
+    const maj = i % 3 === 0;
+    return `<line transform="rotate(${i * 10} 100 100)" x1="100" y1="${maj ? 18 : 21}" x2="100" y2="26" stroke="currentColor" stroke-width="${maj ? 1.6 : 0.9}" stroke-opacity="${maj ? 0.65 : 0.3}"/>`;
+  }).join('');
+  return `<svg class="cb-plate-svg" viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="84" fill="none" stroke="currentColor" stroke-opacity=".22" stroke-width="1"/>
+    <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" stroke-opacity=".14" stroke-width="1" stroke-dasharray="3 3"/>
+    ${ticks}
+    <circle cx="100" cy="100" r="52" fill="none" stroke="currentColor" stroke-opacity=".2" stroke-width="1"/>
+    <line x1="100" y1="36" x2="100" y2="164" stroke="currentColor" stroke-opacity=".12" stroke-width="1"/>
+    <line x1="36" y1="100" x2="164" y2="100" stroke="currentColor" stroke-opacity=".12" stroke-width="1"/>
+    <g transform="translate(100 100) scale(1.25)">
+      <path d="M0 -28 L4 -8 L26 2 L26 7 L4 2 L3 18 L11 24 L11 28 L0 25 L-11 28 L-11 24 L-3 18 L-4 2 L-26 7 L-26 2 L-4 -8 Z" fill="currentColor" fill-opacity=".85"/>
+    </g>
   </svg>`;
 }
 
 export function cardBackHTML(size = 'fit', rarity = 'common') {
   const r = RARITIES[rarity] || RARITIES.common;
-  const uid = 'cb' + Math.random().toString(36).slice(2, 8);
   return `
   <div class="cback-kyara cback-v2 ${size}" style="--rc:${r.color}">
     <div class="cback-inner">
-      <div class="cb-guilloche"></div>
-      <div class="cb-runway"></div>
-      <div class="cb-emblem">${turbineSVG(uid)}</div>
-      <div class="cb-holo"></div>
+      <div class="cb-top-spec mono">REGISTRE OACI · CERTIFICATION</div>
+      <div class="cb-emblem">${compassPlateSVG()}</div>
       <div class="cb-corner tl"></div><div class="cb-corner tr"></div><div class="cb-corner bl"></div><div class="cb-corner br"></div>
       <div class="cb-word">SKYDEX</div>
     </div>
@@ -471,16 +452,13 @@ export function cardHTML(model, opts = {}) {
         <div class="bp-grid"></div>
         <div class="bp-rings"></div>
         <div class="bp-crosshair"></div>
-        <div class="bp-top-meta"><span>TYPE · ${model.code || model.id}</span><span>${model.historic ? 'ARCHIVE' : 'ACTIF'}</span></div>
-        <div class="bp-sil">${planeSVG(model, '#05070c')}</div>
-        <div class="bp-stamp">Non identifié</div>
+        <div class="bp-top-meta"><span>${model.code || model.id}</span><span>${model.historic ? 'ARCHIVE' : 'FLOTTE'}</span></div>
+        <div class="bp-sil">${planeSVG(model, '#090c12')}</div>
+        <div class="bp-stamp">NON IDENTIFIÉ</div>
       </div>`
-    : `<div class="c-halo"></div>
-       <div class="c-rays"></div>
-       ${cardArtSVG(model, opts)}
+    : `${cardArtSVG(model, opts)}
        ${art ? `<img class="c-img" src="assets/planes/${art.src}"${imgStyle} alt="" draggable="false" loading="lazy" onload="this.parentNode.classList.add('has-art')" onerror="this.remove()">` : ''}
        <div class="c-livery-bar"></div>
-       <!-- Bandeau supérieur dans l'art : Livrée compagnie + Indicatif de vol -->
        <div class="c-art-top">
          <div class="c-livery-pill" title="Livrée ${liv.label}">
            <span class="c-livery-tail"></span>
@@ -488,9 +466,8 @@ export function cardHTML(model, opts = {}) {
          </div>
          ${callsignTag}
        </div>
-       <!-- Bandeau inférieur dans l'art façon Kyara (#0065/0093 · OACI · A388) -->
        <div class="c-art-bottom">
-         <span class="c-art-serial">#${serial}/${totalStr} · TYPE · ${model.code || model.id}</span>
+         <span class="c-art-serial">N° ${serial}/${totalStr} · ${model.code || model.id}</span>
          ${regTag}
        </div>`;
 
@@ -498,7 +475,7 @@ export function cardHTML(model, opts = {}) {
     ? `${model.maker} · ${kindOf(model)}`
     : opts.route && opts.route !== '—'
       ? `${liv.label} · ${opts.route}`
-      : `${liv.label} · ${kindOf(model)}`;
+      : `${model.maker} · ${kindOf(model)}`;
 
   return `
   <div class="card kyara-card r-${model.rarity}${locked}${model.historic ? ' historic' : ''} ${opts.size || ''}" style="--rc:${r.color};--lc1:${liv.c1};--lc2:${liv.c2}">
@@ -506,33 +483,30 @@ export function cardHTML(model, opts = {}) {
     <div class="card-tilt">
       <div class="card-frame">
         <div class="card-inner">
-          <!-- En-tête épuré façon Kyara : Nom du modèle + Pastille ronde de rareté -->
           <div class="kyara-head">
             <div class="kyara-title-wrap">
+              <span class="kyara-icao mono">${model.code || model.id}</span>
               <span class="kyara-name${model.name.length > 20 ? ' long' : ''}">${model.name}</span>
             </div>
-            <span class="kyara-badge" style="background:${r.color}">${r.code}</span>
+            <span class="kyara-badge" style="color:${r.color};border-color:${r.color}">${r.code}</span>
           </div>
 
-          <!-- Grande fenêtre d'illustration Full-Art (72% de la carte) ou Blueprint technique -->
           <div class="c-art ${opts.locked ? 'is-blueprint' : 'has-svg'}">
             ${artContent}
           </div>
 
-          <!-- Pied de carte épuré façon Kyara : 1 ligne d'univers/route + 2 KPIs bas -->
           <div class="kyara-foot">
             <div class="kyara-meta">
               <span class="kyara-cat">${subtitleText}</span>
+              <span class="kyara-year mono">${model.year || ''}</span>
             </div>
             <div class="kyara-stats-bar">
-              <span class="ks-item"><em>VIT</em> <b>${opts.locked ? '---' : fmt(model.speed, ' km/h')}</b></span>
-              <span class="ks-item"><em>RAYON</em> <b>${opts.locked ? '---' : fmt(model.range, ' km')}</b></span>
+              <span class="ks-item"><em>CROISIÈRE</em> <b>${opts.locked ? '—' : fmt(model.speed, ' km/h')}</b></span>
+              <span class="ks-item"><em>RAYON</em> <b>${opts.locked ? '—' : fmt(model.range, ' km')}</b></span>
             </div>
           </div>
         </div>
-        <div class="c-foil"></div>
         <div class="c-shine"></div>
-        <div class="c-sparkles"></div>
       </div>
       ${opts.count > 1 ? `<div class="c-count">×${opts.count}</div>` : ''}
     </div>
@@ -559,7 +533,7 @@ export function attachTilt(root) {
 }
 
 export function packHTML(pack, opts = {}) {
-  const sector = { standard: 'SEC-01 // DÉCOLLAGE', premium: 'SEC-02 // LONG-COURRIER', historic: 'ARC-03 // ARCHIVES', legend: 'APEX-04 // LÉGENDE' }[pack.id] || 'SEC-00 // PACK';
+  const sector = { standard: 'SÉRIE 01 · DÉCOLLAGE', premium: 'SÉRIE 02 · LONG-COURRIER', historic: 'SÉRIE 03 · ARCHIVES', legend: 'SÉRIE 04 · PRESTIGE' }[pack.id] || 'SÉRIE · DOTATION';
   return `
   <div class="pack ${opts.size || ''}" style="--pc:${pack.color}">
     <div class="pack-body">
@@ -572,10 +546,9 @@ export function packHTML(pack, opts = {}) {
       </div>
       <div class="pack-info">
         <div class="pack-name">${pack.name}</div>
-        <div class="pack-sub">${pack.cards} cartes</div>
+        <div class="pack-sub">${pack.cards} fiches</div>
       </div>
       <div class="pack-barcode"></div>
-      <div class="pack-shine"></div>
     </div>
   </div>`;
 }

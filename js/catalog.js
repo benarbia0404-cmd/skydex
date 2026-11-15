@@ -2,11 +2,11 @@
 import { applyModelFiction } from './brand.js';
 
 export const RARITIES = {
-  common:    { id: 'common',    code: 'C', label: 'Commune',      color: '#9aa7b5', weight: 60,  fragments: 5,   xp: 10,  order: 0 },
-  uncommon:  { id: 'uncommon',  code: 'U', label: 'Peu commune',  color: '#4ade80', weight: 25,  fragments: 10,  xp: 20,  order: 1 },
-  rare:      { id: 'rare',      code: 'R', label: 'Rare',         color: '#38bdf8', weight: 10,  fragments: 25,  xp: 50,  order: 2 },
-  epic:      { id: 'epic',      code: 'E', label: 'Épique',       color: '#c084fc', weight: 4,   fragments: 60,  xp: 120, order: 3 },
-  legendary: { id: 'legendary', code: 'L', label: 'Légendaire',   color: '#fbbf24', weight: 1,   fragments: 150, xp: 300, order: 4 },
+  common:    { id: 'common',    code: 'C', label: 'Commune',      color: '#8c97a8', weight: 60,  fragments: 5,   xp: 10,  order: 0 },
+  uncommon:  { id: 'uncommon',  code: 'U', label: 'Peu commune',  color: '#4e9a74', weight: 25,  fragments: 10,  xp: 20,  order: 1 },
+  rare:      { id: 'rare',      code: 'R', label: 'Rare',         color: '#4b83b8', weight: 10,  fragments: 25,  xp: 50,  order: 2 },
+  epic:      { id: 'epic',      code: 'E', label: 'Épique',       color: '#c87a4b', weight: 4,   fragments: 60,  xp: 120, order: 3 },
+  legendary: { id: 'legendary', code: 'L', label: 'Légendaire',   color: '#d6a648', weight: 1,   fragments: 150, xp: 300, order: 4 },
 };
 export const RARITY_LIST = Object.values(RARITIES);
 

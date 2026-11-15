@@ -122,8 +122,6 @@ export async function openEncounter(f, ctx) {
       <div class="enc-sub mono">${esc(FC(f))}${f.airline ? ' · ' + esc(FA(f)) : ''}${routeStr ? ' · ' + esc(routeStr) : ''} · ${flStr}</div>
     </div>
     <div class="enc-stage" id="enc-stage" style="--ec:${r.color};--rc:${r.color};--lk:0;--blur:6.5px">
-      <div class="enc-aura"></div>
-
       <!-- PHASE 1 : Viseur optique reflex + Bague de mise au point autour de l'objectif (identique pour toutes les raretés) -->
       <div class="enc-vf" id="enc-vf">
         <div class="vf-lens">
@@ -142,25 +140,25 @@ export async function openEncounter(f, ctx) {
           <div class="vf-outer-ring" id="vf-outer-ring" aria-hidden="true">${ticksHTML}</div>
           <div class="vf-iris" id="vf-iris"></div>
           <div class="vf-hud-top mono">
-            <span>WIND // ${spdStr}</span>
+            <span>1/2000s · f/4.0 · ISO 100</span>
             <span id="vf-zoom">FOCUS 0%</span>
           </div>
           <div class="vf-reticle" id="enc-reticle">
             <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
             <div class="vf-ring"></div>
             <div class="vf-cross"></div>
-            <span class="vf-lock-pct mono" id="vf-pct">FLOU · TOURNE LA BAGUE</span>
+            <span class="vf-lock-pct mono" id="vf-pct">MISE AU POINT REQUISE</span>
           </div>
           <div class="vf-hud-bot mono">
             <span>${flStr}</span>
             <span>${spdStr}</span>
-            <span>HDG ${hdgStr}</span>
+            <span>CAP ${hdgStr}</span>
             <span>${distStr}</span>
           </div>
           <div class="vf-polaroid-frame" id="vf-polaroid">
             <div class="vfp-meta">
               <span class="vfp-rar" style="background:${r.color}">${esc(r.label.toUpperCase())}</span>
-              <b class="mono">${esc(FC(f))} // ${esc(model.code || model.id)}</b>
+              <b class="mono">${esc(FC(f))} · ${esc(model.code || model.id)}</b>
             </div>
           </div>
         </div>
@@ -428,7 +426,7 @@ export async function openEncounter(f, ctx) {
 
     const vR = vf.getBoundingClientRect();
     const cx = vR.left + vR.width / 2, cy = vR.top + vR.height / 2;
-    burst(cx, cy, quality === 'excellent' ? ['#fde047', '#fff'] : [r.color, '#fff'], quality === 'excellent' ? 44 : 24, 0.95);
+    burst(cx, cy, ['#eceff4', '#d6a648'], 18, 0.8);
 
     await resolveCapture(quality, cx, cy, vR);
   }
@@ -461,7 +459,7 @@ export async function openEncounter(f, ctx) {
       await wait(540);
 
       const flash = document.createElement('div'); flash.className = 'flash'; ov.appendChild(flash);
-      burst(cx, cy, model.rarity === 'legendary' ? RAINBOW : [r.color, '#fff', '#fbbf24'], 85 + r.order * 22, 1.25 + r.order * 0.1);
+      burst(cx, cy, [r.color, '#eceff4', '#d6a648'], 28, 0.9);
       sfx('success'); vibrate([80, 40, 150]);
 
       const beforeLv = levelInfo();
@@ -530,7 +528,7 @@ export async function openEncounter(f, ctx) {
   function showSummary(res, xpGain, coinGain, lv, quality, combo, beforeLv, afterLv, vR) {
     ov.classList.add('caught');
     $('.enc-top', ov).innerHTML = `
-      <div class="enc-rarity">${res.isNew ? '✦ NOUVEAU POLAROÏD DÉVELOPPÉ !' : `CLICHÉ ARCHIVÉ · ×${res.count}`}</div>
+      <div class="enc-rarity">${res.isNew ? 'NOUVEAU CLICHÉ HOMOLOGUÉ' : `OBSERVATION ARCHIVÉE · ×${res.count}`}</div>
       <h2>${esc(model.name)}</h2>
       <div class="enc-sub mono"><span class="sum-stars">${STARS[quality]}</span> ${THROW_LABEL[quality]} · ${esc(FC(f))}</div>`;
 
@@ -551,7 +549,7 @@ export async function openEncounter(f, ctx) {
     const chips = [
       `<span class="rw-chip xp">+${xpGain} XP</span>`,
       `<span class="rw-chip">${iconSVG('coin')} +${coinGain} CR</span>`,
-      combo >= 2 ? `<span class="rw-chip combo">🔥 SÉRIE ×${combo}</span>` : '',
+      combo >= 2 ? `<span class="rw-chip combo">SÉRIE ×${combo}</span>` : '',
       res.fragments ? `<span class="rw-chip frag">${iconSVG('frag')} +${res.fragments}</span>` : '',
     ].join('');
 

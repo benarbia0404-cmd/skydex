@@ -92,15 +92,15 @@ function initMap() {
   }).addTo(map);
   rangeCircle = L.circle([me.lat, me.lon], {
     radius: RANGE_KM * 1000,
-    color: '#e5b84b',
-    weight: 1.5,
-    dashArray: '5 8',
-    fillColor: '#e5b84b',
-    fillOpacity: .04,
+    color: '#8a94a6',
+    weight: 1.2,
+    dashArray: '4 6',
+    fillColor: '#8a94a6',
+    fillOpacity: .02,
     interactive: false,
   }).addTo(map);
   sweepMk = L.marker([me.lat, me.lon], {
-    icon: L.divIcon({ className: 'sweep-mk', html: '<div class="radar-sweep"></div>', iconSize: [0, 0] }),
+    icon: L.divIcon({ className: 'sweep-mk', html: '', iconSize: [0, 0] }),
     interactive: false, zIndexOffset: -3000,
   }).addTo(map);
   map.on('zoomend', sizeSweep);
@@ -441,7 +441,7 @@ function renderSheet(f) {
   sh.innerHTML = `
     <div class="grab"></div>
     <div class="sh-strip-top">
-      <span class="sec-kicker">FLIGHT STRIP // TYPE · ${esc(m.code || m.id)}</span>
+      <span class="sec-kicker">FICHE DE VOL · ${esc(m.code || m.id)}</span>
       <span class="sh-collect-status ${have ? 'owned' : 'new'}">
         ${have ? `EN HANGAR ×${state.cards[m.id].count}` : 'NOUVEL APPAREIL'}
       </span>

@@ -18,23 +18,21 @@
   <meta property="og:image" content="assets/icons/icon-512.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=21">
 </head>
 <body>
 <div id="app">
   <!-- Écran d'initialisation avionique -->
   <div id="splash" class="splash">
-    <div class="sp-grid" aria-hidden="true"></div>
-    <div class="sp-radar-ring r1"><i></i></div>
+    <div class="sp-radar-ring r1"></div>
     <div class="sp-radar-ring r2"></div>
-    <div class="sp-hud-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    <div class="sp-runway"><span>HDG 270°</span><i></i><span>RADAR LIVE</span></div>
+    <div class="sp-runway"><span>270°</span><i></i><span>ADS-B</span></div>
     <div class="sp-plane"></div>
-    <div class="sp-kicker">SYSTÈME OPTIQUE &amp; ADS-B // VERROUILLAGE TEMPS RÉEL</div>
+    <div class="sp-kicker">OBSERVATION AÉRONAUTIQUE · TEMPS RÉEL</div>
     <div class="logo">SKY<em>DEX</em></div>
-    <div class="tag">CHASSE &amp; COLLECTION AÉRONAUTIQUE</div>
+    <div class="tag">CARNET DE VOL &amp; IDENTIFICATION</div>
     <div class="loadbar"><i></i></div>
-    <div class="sp-boot mono">ACQUISITION TRANSPONDEURS EN COURS…</div>
+    <div class="sp-boot mono">SYNCHRONISATION DU SECTEUR…</div>
   </div>
 
   <!-- HUD Avionique -->
@@ -46,7 +44,7 @@
       </div>
       <div class="xp">
         <div class="xp-head">
-          <span class="xp-lbl">RANG PILOTE</span>
+          <span class="xp-lbl">CARNET</span>
           <small id="hud-xp-txt">0 / 100 XP</small>
         </div>
         <div class="xp-bar"><i id="hud-xp"></i></div>
@@ -54,7 +52,7 @@
     </div>
     <div class="res">
       <div class="chip chip-streak" id="hud-streak" title="Série de captures consécutives" hidden>
-        <span class="streak-flame">🔥</span>
+        <span class="streak-tag mono">SÉRIE</span>
         <b>×2</b>
       </div>
       <div class="chip chip-frag" id="hud-frag" title="Fragments de plans (100 = 1 Pack)">
@@ -195,7 +193,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
-<script type="module" src="js/app.js?v=20"></script>
+<script type="module" src="js/app.js?v=21"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

@@ -149,8 +149,8 @@ export function renderCollection() {
         route: best.route || '',
       })}
       <div class="cell-foot">
-        <span class="cell-code">TYPE · ${m.code || m.id}</span>
-        <span class="cell-status ${isOwned ? 'ok' : ''}">${isOwned ? `EN HANGAR ×${cnt}` : rar.label}</span>
+        <span class="cell-code">${m.code || m.id}</span>
+        <span class="cell-status ${isOwned ? 'ok' : ''}">${isOwned ? `×${cnt}` : rar.label}</span>
       </div>
     </div>`;
   }).join('');
@@ -180,17 +180,20 @@ export function initCollection() {
 function showCardDetail(model) {
   const have = owned(model.id), c = state.cards[model.id];
   const best = have && c && c.best ? c.best : {};
-  const r = RARITIES[model.rarity];
+  const r = RARITIES[model.rarity] || RARITIES.common;
+  const mach = model.speed ? (model.speed / 1062).toFixed(2).replace('.', ',') : null;
+  const spdPct = Math.min(100, Math.round(((model.speed || 300) / 1000) * 100));
+  const rngPct = Math.min(100, Math.round(((model.range || 1500) / 16000) * 100));
+  const capPct = Math.min(100, Math.round(((model.seats || 10) / 550) * 100));
   sfx('tap');
   modal(`
     <div class="card-showcase-wrap" style="--rc:${r.color}" data-close>
       <button class="showcase-close" data-close aria-label="Fermer">✕</button>
-      <div class="showcase-aura"></div>
       <div class="showcase-3d-stage">
         <div class="showcase-3d-card" id="showcase-spin">
           <div class="showcase-face showcase-front">
             ${cardHTML(model, {
-              size: 'lg',
+              size: 'md',
               locked: !have,
               reg: best.reg || '',
               callsign: best.callsign || '',
@@ -200,8 +203,40 @@ function showCardDetail(model) {
             })}
           </div>
           <div class="showcase-face showcase-back">
-            ${cardBackHTML('lg', model.rarity)}
+            ${cardBackHTML('md', model.rarity)}
           </div>
+        </div>
+      </div>
+      <div class="showcase-dossier" id="showcase-dossier">
+        <div class="sd-head">
+          <div>
+            <span class="sd-kicker mono">${esc(model.code || model.id)} · ${esc(kindOf(model).toUpperCase())} · ${esc(r.label.toUpperCase())}</span>
+            <h3>${esc(model.name)}</h3>
+          </div>
+          <span class="sd-status mono ${have ? 'ok' : ''}">${have ? `${c.count} PRISE${c.count > 1 ? 'S' : ''}` : 'NON IDENTIFIÉ'}</span>
+        </div>
+        <div class="sd-bars">
+          <div class="sd-bar-row">
+            <span class="mono">CROISIÈRE</span>
+            <div class="sd-track"><i style="width:${have ? spdPct : 0}%"></i></div>
+            <b class="mono">${have && model.speed ? `${model.speed} km/h (M ${mach})` : '—'}</b>
+          </div>
+          <div class="sd-bar-row">
+            <span class="mono">RAYON</span>
+            <div class="sd-track"><i style="width:${have ? rngPct : 0}%"></i></div>
+            <b class="mono">${have && model.range ? `${Number(model.range).toLocaleString('fr-FR')} km` : '—'}</b>
+          </div>
+          <div class="sd-bar-row">
+            <span class="mono">CAPACITÉ</span>
+            <div class="sd-track"><i style="width:${have ? capPct : 0}%"></i></div>
+            <b class="mono">${have && model.seats ? `${model.seats} pax` : '—'}</b>
+          </div>
+        </div>
+        <div class="sd-meta-grid mono">
+          <div><small>CONSTRUCTEUR</small><b>${esc(model.maker || '—')}</b></div>
+          <div><small>MISE EN SERVICE</small><b>${model.year || '—'}</b></div>
+          <div><small>DERNIER VOL</small><b>${have && best.callsign ? esc(best.callsign) : '—'}</b></div>
+          <div><small>IMMAT. / ROUTE</small><b>${have && (best.reg || best.route) ? esc([best.reg, best.route].filter(Boolean).join(' · ')) : '—'}</b></div>
         </div>
       </div>
     </div>`, (m, close) => {
@@ -209,13 +244,11 @@ function showCardDetail(model) {
     if (box) box.classList.add('showcase-only');
     const card3d = m.querySelector('#showcase-spin');
     if (card3d) {
-      attachSpinner(card3d, { speed: 40 });
+      attachSpinner(card3d, { speed: 28 });
       card3d.addEventListener('click', e => e.stopPropagation());
     }
-    const hint = document.createElement('div');
-    hint.className = 'showcase-hint';
-    hint.textContent = 'Fais tourner la carte avec ton doigt';
-    m.querySelector('.card-showcase-wrap')?.appendChild(hint);
+    const dossier = m.querySelector('#showcase-dossier');
+    if (dossier) dossier.addEventListener('click', e => e.stopPropagation());
     const bg = m.querySelector('.card-showcase-wrap');
     if (bg) bg.addEventListener('click', e => { if (e.target === bg) close(); });
   });
@@ -264,7 +297,6 @@ export function renderMissions() {
     </div>
     ${inv.length ? `
       <div class="soute-showcase" style="--pc:${activePack.color}">
-        <div class="soute-glow"></div>
         ${inv.length > 1 ? `
           <div class="soute-selector">
             ${inv.map(([id, n]) => `
@@ -461,8 +493,8 @@ export function renderShop() {
     <div class="boarding-pass ${free ? 'ready' : ''}">
       <div class="bp-main">
         <div class="bp-header">
-          <span class="bp-airline">SKYDEX AIRWAYS // PACK QUOTIDIEN</span>
-          <span class="bp-class">PRIORITÉ</span>
+          <span class="bp-airline">DOTATION QUOTIDIENNE · PACK D'OBSERVATION</span>
+          <span class="bp-class">SERVICE</span>
         </div>
         <div class="bp-route">
           <div class="bp-city"><b>HGR</b><small>HANGAR</small></div>
@@ -612,7 +644,7 @@ function buy(id, method) {
   } else {
     modal(`
       <div class="dossier-top">
-        <span class="sec-kicker">PAIEMENT // SIMULATION</span>
+        <span class="sec-kicker">CONFIRMATION · MODE DÉMONSTRATION</span>
         <button class="sh-close" data-close>✕</button>
       </div>
       <h2>Confirmer l'achat</h2>
@@ -657,7 +689,7 @@ export function openPackFlow(packId) {
   ov.style.setProperty('--pc', pack.color);
   ov.innerHTML = `
     <div class="packo-top-bar">
-      <span class="sec-kicker">OUVERTURE DE PACK // ${esc(pack.name.toUpperCase())}</span>
+      <span class="sec-kicker">DOTATION · ${esc(pack.name.toUpperCase())}</span>
     </div>
     <div class="packo-stage">
       ${packHTML(pack, { size: 'lg' })}

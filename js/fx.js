@@ -162,16 +162,17 @@ function ensureCanvas() {
   resize(); addEventListener('resize', resize);
 }
 
-export function burst(x, y, color = '#fbbf24', count = 40, power = 1) {
+export function burst(x, y, color = '#d6a648', count = 24, power = 0.85) {
   ensureCanvas();
   const dpr = devicePixelRatio;
-  for (let i = 0; i < count; i++) {
-    const a = Math.random() * Math.PI * 2, s = (2 + Math.random() * 7) * power * dpr;
+  const n = Math.min(36, Math.round(count * 0.55));
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = (1.5 + Math.random() * 4.5) * power * dpr;
     parts.push({
-      x: x * dpr, y: y * dpr, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 2 * dpr,
-      life: 1, decay: 0.012 + Math.random() * 0.016, size: (3 + Math.random() * 5) * dpr,
+      x: x * dpr, y: y * dpr, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1.2 * dpr,
+      life: 1, decay: 0.022 + Math.random() * 0.02, size: (2 + Math.random() * 3) * dpr,
       color: Array.isArray(color) ? color[(Math.random() * color.length) | 0] : color,
-      star: Math.random() < 0.4, rot: Math.random() * 6,
+      star: false, rot: Math.random() * 6,
     });
   }
   if (!raf) raf = requestAnimationFrame(tick);
@@ -181,20 +182,16 @@ function tick() {
   g2.clearRect(0, 0, canvas.width, canvas.height);
   parts = parts.filter(p => p.life > 0);
   for (const p of parts) {
-    p.x += p.vx; p.y += p.vy; p.vy += 0.18 * devicePixelRatio; p.vx *= 0.99;
-    p.life -= p.decay; p.rot += 0.15;
-    g2.globalAlpha = Math.max(0, p.life);
+    p.x += p.vx; p.y += p.vy; p.vy += 0.14 * devicePixelRatio; p.vx *= 0.98;
+    p.life -= p.decay; p.rot += 0.1;
+    g2.globalAlpha = Math.max(0, p.life * 0.85);
     g2.fillStyle = p.color;
     g2.save(); g2.translate(p.x, p.y); g2.rotate(p.rot);
-    if (p.star) {
-      g2.beginPath();
-      for (let k = 0; k < 8; k++) { const r = k % 2 ? p.size * 0.4 : p.size; g2.lineTo(Math.cos(k * Math.PI / 4) * r, Math.sin(k * Math.PI / 4) * r); }
-      g2.closePath(); g2.fill();
-    } else g2.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    g2.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.55);
     g2.restore();
   }
   g2.globalAlpha = 1;
   if (parts.length) raf = requestAnimationFrame(tick); else { raf = 0; g2.clearRect(0, 0, canvas.width, canvas.height); }
 }
 
-export const RAINBOW = ['#f87171', '#fbbf24', '#4ade80', '#38bdf8', '#c084fc', '#f472b6'];
+export const RAINBOW = ['#eceff4', '#e5b55c', '#d6a648', '#c87a4b'];

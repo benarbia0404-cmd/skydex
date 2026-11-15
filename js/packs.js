@@ -6,26 +6,26 @@ const ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 export const PACKS = {
   standard: {
-    id: 'standard', name: 'Pack Décollage', icon: '🛫', color: '#38bdf8', cards: 3, pool: 'modern',
-    desc: '3 cartes de l\'aviation actuelle. Au moins 1 Peu commune.',
+    id: 'standard', name: 'Pack Décollage', icon: '🛫', color: '#4b83b8', cards: 3, pool: 'modern',
+    desc: '3 fiches d\'appareils de la flotte actuelle. Au moins 1 Peu commune.',
     rates: { common: 62, uncommon: 26, rare: 9.5, epic: 2.4, legendary: 0.1 }, min: 'uncommon',
     price: { coins: 200, eur: 0.99 },
   },
   premium: {
-    id: 'premium', name: 'Pack Long-Courrier', icon: '🛩️', color: '#c084fc', cards: 5, pool: 'all',
-    desc: '5 cartes, modernes ou historiques. Au moins 1 Rare.',
+    id: 'premium', name: 'Pack Long-Courrier', icon: '🛩️', color: '#6e849e', cards: 5, pool: 'all',
+    desc: '5 appareils civils ou spéciaux, modernes ou historiques. Au moins 1 Rare.',
     rates: { common: 44, uncommon: 30, rare: 17, epic: 7.5, legendary: 1.5 }, min: 'rare',
     price: { coins: 700, eur: 2.99 },
   },
   historic: {
-    id: 'historic', name: 'Pack Historique', icon: '📜', color: '#d97706', cards: 3, pool: 'historic',
-    desc: '3 avions disparus du ciel : supersoniques, hélices de légende, pionniers du jet… Au moins 1 Rare.',
+    id: 'historic', name: 'Pack Archives', icon: '📜', color: '#c87a4b', cards: 3, pool: 'historic',
+    desc: '3 avions de légende retirés du service : supersoniques, pionniers du jet et hélices mythiques.',
     rates: { uncommon: 30, rare: 40, epic: 25, legendary: 5 }, min: 'rare',
     price: { coins: 1000, eur: 4.99 },
   },
   legend: {
-    id: 'legend', name: 'Pack Légendaire', icon: '👑', color: '#fbbf24', cards: 5, pool: 'all',
-    desc: '5 cartes dont 1 Épique minimum. Le légendaire reste rare !',
+    id: 'legend', name: 'Pack Prestige', icon: '👑', color: '#d6a648', cards: 5, pool: 'all',
+    desc: '5 fiches certifiées dont 1 Épique minimum. Les appareils Légendaires restent d\'une grande rareté.',
     rates: { common: 35, uncommon: 30, rare: 22, epic: 10, legendary: 3 }, min: 'epic', minRates: { epic: 88, legendary: 12 },
     price: { coins: null, eur: 9.99 },
   },

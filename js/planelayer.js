@@ -5,7 +5,7 @@ import { posAt } from './flights.js';
 import { planeSVG } from './catalog.js';
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace';
-const GOLD = '#e5b84b';
+const GOLD = '#d49b38';
 const spriteCache = new Map();
 
 function sprite(model, color, size, onLoad) {
