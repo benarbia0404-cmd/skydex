@@ -44,7 +44,7 @@ function initTabs() {
 
 // ----------------------------------------------------------------- Carte
 function initMap() {
-  map = L.map('map', { center: [me.lat, me.lon], zoom: 8, zoomControl: false, attributionControl: true, minZoom: 4, maxZoom: 13, worldCopyJump: true });
+  map = L.map('map', { center: [me.lat, me.lon], zoom: 8, zoomControl: false, attributionControl: true, minZoom: state.settings.explorer ? 4 : 7, maxZoom: 13, worldCopyJump: true });
   const customTileUrl = window.SKYDEX_TILE_URL || localStorage.getItem('skydex.tileUrl');
   const tileUrl = customTileUrl || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   const addRaster = () => {
@@ -147,9 +147,13 @@ function etaToRange(f) {
 
 let viewTimer;
 function syncView() {
-  const c = map.getCenter(), b = map.getBounds();
-  const nm = b.getNorthEast().distanceTo(c) / NM;
-  feed.setView(c.lat, c.lng, nm * 1.1);
+  if (state.settings.explorer) {
+    const c = map.getCenter(), b = map.getBounds();
+    feed.setView(c.lat, c.lng, b.getNorthEast().distanceTo(c) / NM * 1.1);
+  } else {
+    // Mode joueur : on ne charge QUE le ciel autour du joueur (zone de capture), peu importe où regarde la carte
+    feed.setView(me.lat, me.lon, Math.ceil(RANGE_KM * 1.15 / 1.852));
+  }
   clearTimeout(viewTimer);
   viewTimer = setTimeout(() => feed.poll(), 700);
 }
@@ -159,6 +163,7 @@ function placeMe(lat, lon, real) {
   me = { lat, lon, real };
   meMarker.setLatLng([lat, lon]); rangeCircle.setLatLng([lat, lon]); sweepMk.setLatLng([lat, lon]);
   feed.setHome(lat, lon);
+  syncView();
   state.lastPos = { lat: +lat.toFixed(3), lon: +lon.toFixed(3) }; // dernière zone connue (reprise rapide au prochain lancement)
   setTimeout(sizeSweep, 60);
 }
@@ -298,6 +303,7 @@ function renderFlights() {
     const sel = f.id === selectedId;
     if (!sel && !passes(f)) continue;
     const [lat, lon] = posAt(f, now);
+    if (!state.settings.explorer && distKm(me.lat, me.lon, lat, lon) > RANGE_KM) continue;   // hors de ta zone : invisible
     if (!sel && !b.contains([lat, lon])) continue;
     vis.push({ f, lat, lon, r: RARITIES[f.model.rarity], sel });
   }
