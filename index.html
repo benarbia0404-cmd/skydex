@@ -18,20 +18,23 @@
   <meta property="og:image" content="assets/icons/icon-512.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/style.css?v=17">
+  <link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body>
 <div id="app">
   <!-- Écran d'initialisation avionique -->
   <div id="splash" class="splash">
-    <div class="sp-radar-ring r1"></div>
+    <div class="sp-grid" aria-hidden="true"></div>
+    <div class="sp-radar-ring r1"><i></i></div>
     <div class="sp-radar-ring r2"></div>
-    <div class="sp-runway"><span>27R</span><i></i><span>09L</span></div>
+    <div class="sp-hud-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="sp-runway"><span>HDG 270°</span><i></i><span>RADAR LIVE</span></div>
     <div class="sp-plane"></div>
-    <div class="sp-kicker">ADS-B TRANSPONDER // RADAR AÉRONAUTIQUE</div>
+    <div class="sp-kicker">SYSTÈME OPTIQUE &amp; ADS-B // VERROUILLAGE TEMPS RÉEL</div>
     <div class="logo">SKY<em>DEX</em></div>
-    <div class="tag">COLLECTION AÉRONAUTIQUE EN TEMPS RÉEL</div>
+    <div class="tag">CHASSE &amp; COLLECTION AÉRONAUTIQUE</div>
     <div class="loadbar"><i></i></div>
+    <div class="sp-boot mono">ACQUISITION TRANSPONDEURS EN COURS…</div>
   </div>
 
   <!-- HUD Avionique -->
@@ -50,6 +53,10 @@
       </div>
     </div>
     <div class="res">
+      <div class="chip chip-streak" id="hud-streak" title="Série de captures consécutives" hidden>
+        <span class="streak-flame">🔥</span>
+        <b>×2</b>
+      </div>
       <div class="chip chip-frag" id="hud-frag" title="Fragments de plans (100 = 1 Pack)">
         <svg class="ui-ic ic-frag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><polygon points="12 2 20.5 7 20.5 17 12 22 3.5 17 3.5 7 12 2"/><polygon points="12 7 16.5 9.6 16.5 14.4 12 17 7.5 14.4 7.5 9.6 12 7" stroke-opacity=".55"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
         <b>0</b>
@@ -188,7 +195,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
-<script type="module" src="js/app.js?v=17"></script>
+<script type="module" src="js/app.js?v=18"></script>
 <script>
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

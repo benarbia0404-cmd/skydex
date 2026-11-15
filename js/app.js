@@ -712,8 +712,8 @@ function showOnboarding() {
   const slides = [
     { art: `<div class="ob-radar"><i></i><b style="--a:30deg;--r:38%"></b><b class="r" style="--a:150deg;--r:30%"></b><b class="e" style="--a:250deg;--r:42%"></b></div>`,
       title: 'Ton ciel est un terrain de chasse', text: 'Les vrais avions qui volent au-dessus de toi apparaissent en direct sur ton radar, avec leur compagnie, leur route et leur altitude.' },
-    { art: `<div class="ob-beacon"><div class="bc-sphere"><i class="bc-gyro g1"></i><i class="bc-gyro g2"></i><i class="bc-gyro g3"></i><i class="bc-core"></i><i class="bc-gloss"></i></div></div>`,
-      title: 'Touche, vise, capture', text: 'Touche un avion dans ton cercle : sa carte apparaît. Glisse la balise radar vers elle au moment où le cercle est petit pour un lancer « Excellent ».' },
+    { art: `<div class="ob-vf"><div class="ob-vf-ring"></div><div class="ob-vf-cross"></div><div class="ob-vf-plane">${planeSVG('wide')}</div><span class="ob-vf-tag mono">SPOT ★</span></div>`,
+      title: 'Verrouille, cadre, photographie', text: 'Touche un avion dans ton ciel pour ouvrir le viseur optique. Maintiens le déclencheur pour verrouiller la cible et relâche dans la zone dorée : ton cliché se développe en carte 3D !' },
     { art: `<div class="ob-rar">${RARITY_LIST.map(r => `<span style="--rc:${r.color}">${r.code}</span>`).join('')}</div>`,
       title: 'Complète ton hangar', text: 'Commun, rare, épique… jusqu’aux légendaires comme le géant à double pont ou le supersonique Mach 2. Ouvre des packs, réussis tes missions et deviens le meilleur spotter.' },
     { art: `<div class="ob-pin">${iconSVG('locate')}</div>`,

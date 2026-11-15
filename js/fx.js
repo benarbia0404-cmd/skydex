@@ -59,7 +59,33 @@ export function sfx(name) {
     case 'impact': tone(70, 0.6, 'sine', 0.3, 0, 30); noise(0.5, 2000, 150, 0.2); break;
     case 'shimmer': [1568, 1976, 2349, 2637, 3136].forEach((f, i) => tone(f, 0.5, 'sine', 0.045, i * 0.07)); break;
     case 'levelup': [523, 784, 1046, 1568].forEach((f, i) => tone(f, 0.2, 'sine', 0.12, i * 0.08)); break;
+    case 'shutter':
+      noise(0.055, 1800, 600, 0.22);
+      tone(1400, 0.035, 'square', 0.09);
+      noise(0.065, 900, 2600, 0.18);
+      tone(1760, 0.09, 'sine', 0.11, 0.055);
+      break;
+    case 'polaroid':
+      noise(0.32, 600, 2400, 0.08);
+      [587, 740, 880, 1175, 1480].forEach((f, i) => tone(f, 0.28, 'triangle', 0.09, i * 0.065));
+      break;
+    case 'combo':
+      [659, 880, 1175, 1568].forEach((f, i) => tone(f, 0.14, 'triangle', 0.11, i * 0.055));
+      break;
   }
+}
+
+let lastLockBeep = 0;
+/** Bip de verrouillage radar dynamique pendant que le joueur maintient le viseur. */
+export function lockPulse(p, inZone) {
+  if (!state.settings.sound) return;
+  const now = performance.now();
+  const interval = inZone ? 75 : Math.max(85, 230 - p * 145);
+  if (now - lastLockBeep < interval) return;
+  lastLockBeep = now;
+  const f = inZone ? 1568 : Math.round(520 + p * 680);
+  tone(f, inZone ? 0.065 : 0.05, inZone ? 'triangle' : 'sine', inZone ? 0.11 : 0.075);
+  if (inZone) tone(2093, 0.06, 'sine', 0.07, 0.02);
 }
 
 export function vibrate(p) { if (state.settings.sound && navigator.vibrate) navigator.vibrate(p); }

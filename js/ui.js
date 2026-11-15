@@ -36,7 +36,7 @@ export function toast(msg, cls = '', ms = 3000) {
   setTimeout(() => t.remove(), ms + 500);
 }
 
-let lastCoins = null, lastFrag = null;
+let lastCoins = null, lastFrag = null, lastLvl = null, lastCombo = 0;
 export function updateHUD() {
   const { lvl, cur, need } = levelInfo();
   $('#hud-lvl').textContent = lvl;
@@ -44,11 +44,37 @@ export function updateHUD() {
   $('#hud-xp-txt').textContent = `${cur} / ${need} XP`;
   $('#hud-coins b').textContent = state.coins.toLocaleString('fr-FR');
   $('#hud-frag b').textContent = state.fragments;
-  if (lastCoins !== null && lastCoins !== state.coins) bump('#hud-coins');
-  if (lastFrag !== null && lastFrag !== state.fragments) bump('#hud-frag');
-  lastCoins = state.coins; lastFrag = state.fragments;
+  const combo = state.stats?.combo || 0;
+  const stEl = $('#hud-streak');
+  if (stEl) {
+    stEl.hidden = combo < 2;
+    if (combo >= 2) {
+      $('b', stEl).textContent = '×' + combo;
+      if (combo > lastCombo) bump('#hud-streak');
+    }
+  }
+  if (lastLvl !== null && lvl > lastLvl) bump('.lvl-badge');
+  if (lastCoins !== null && lastCoins !== state.coins) {
+    bump('#hud-coins');
+    const d = state.coins - lastCoins;
+    if (d > 0) floatDelta('#hud-coins', `+${d}`);
+  }
+  if (lastFrag !== null && lastFrag !== state.fragments) {
+    bump('#hud-frag');
+    const d = state.fragments - lastFrag;
+    if (d > 0) floatDelta('#hud-frag', `+${d}`);
+  }
+  lastCoins = state.coins; lastFrag = state.fragments; lastLvl = lvl; lastCombo = combo;
 }
-function bump(sel) { const e = $(sel); e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
+function bump(sel) { const e = $(sel); if (!e) return; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
+function floatDelta(sel, txt) {
+  const host = $(sel); if (!host) return;
+  const tag = document.createElement('i');
+  tag.className = 'hud-delta';
+  tag.textContent = txt;
+  host.appendChild(tag);
+  setTimeout(() => tag.remove(), 950);
+}
 
 /** Ouvre une modale générique. Retourne une fonction close(). */
 export function modal(html, onMount) {

@@ -366,7 +366,7 @@ export function cardBackHTML(size = 'fit', rarity = 'common') {
  * on la fait pivoter en glissant, et un « flick » la relance avec de l'inertie.
  */
 export function attachSpinner(el, opts = {}) {
-  const speed = opts.speed ?? 46;
+  let speed = opts.speed ?? 46;
   let angle = opts.start ?? 0, vel = opts.paused ? 0 : speed, tiltX = 0;
   let dragging = false, paused = !!opts.paused, lastX = 0, lastY = 0, lastT = 0, prev = performance.now(), raf = 0;
   const shine = () => el.querySelector('.showcase-front .card-tilt');
@@ -418,6 +418,18 @@ export function attachSpinner(el, opts = {}) {
     pause() { paused = true; vel = 0; },
     resume() { paused = false; prev = performance.now(); },
     boost(v = 900) { vel = v; },
+    setSpeed(v) { speed = v; },
+    // Ramène doucement la carte de face (angle multiple de 360°, sans inclinaison) et la fige : « photo prise »
+    faceFront(ms = 450) {
+      paused = true; vel = 0;
+      const a0 = angle, a1 = Math.round(a0 / 360) * 360, t0 = performance.now(), x0 = tiltX;
+      const step = now => {
+        const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+        angle = a0 + (a1 - a0) * e; tiltX = x0 * (1 - e);
+        if (k < 1 && el.isConnected) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    },
     destroy() { cancelAnimationFrame(raf); },
   };
 }
