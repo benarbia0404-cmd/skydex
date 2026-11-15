@@ -3155,6 +3155,8 @@ main {
   position: relative;
   display: grid;
   place-items: center;
+  perspective: 1100px;
+  perspective-origin: 50% 50%;
 }
 .deck-ghost {
   position: absolute;
@@ -3171,16 +3173,25 @@ main {
   z-index: 0;
 }
 
+/* Retournement : dos et face partagent la MÊME cellule de grille (centrage garanti, aucun saut),
+   rotation autour du centre exact, GPU-composited, sans z-fighting entre les deux faces. */
 .flip {
   position: relative;
   z-index: 2;
+  display: grid;
+  place-items: center;
   transform-style: preserve-3d;
-  transition: transform .58s cubic-bezier(.22, 1, .36, 1);
+  transform-origin: 50% 50%;
+  transition: transform .62s cubic-bezier(.3, .9, .3, 1);
+  will-change: transform;
   cursor: pointer;
 }
 .flip.shown { transform: rotateY(180deg); }
+.flip > .cback-wrap, .flip > .face { grid-area: 1 / 1; }
 .flip .cback-wrap {
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(1px);
   border-radius: 1.05em;
 }
 .flip .cback-wrap.aura .cback-kyara {
@@ -3188,12 +3199,34 @@ main {
   border-color: var(--rc);
 }
 .flip .face {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
   backface-visibility: hidden;
-  transform: rotateY(180deg);
+  -webkit-backface-visibility: hidden;
+  transform: rotateY(180deg) translateZ(1px);
   display: grid;
   place-items: center;
+}
+.flip .face > * { margin: 0; }
+
+/* Bulles de regroupement des avions */
+.cluster-mk { background: none; border: 0; }
+.cl-bub {
+  position: relative; width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, rgba(30, 40, 60, .95), rgba(10, 14, 24, .95));
+  border: 2px solid var(--rc, #9aa7bd);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--rc, #9aa7bd) 55%, transparent), 0 4px 10px rgba(0, 0, 0, .6);
+  color: #fff; font: 800 15px/1 var(--mono, monospace);
+  cursor: pointer; transition: transform .15s;
+}
+.cl-bub:active { transform: scale(.92); }
+.cl-bub i {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 9px; background: var(--gold, #e5b84b); color: #1a1405;
+  font: 800 10px/18px var(--mono, monospace); text-align: center; font-style: normal;
 }
 
 .rv-caption {

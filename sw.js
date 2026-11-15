@@ -1,5 +1,5 @@
 // Service worker SkyDex : coque de l'application disponible hors connexion, données de vol toujours en direct.
-const VERSION = 'skydex-v18';
+const VERSION = 'skydex-v19';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/app.js', './js/brand.js', './js/catalog.js', './js/cards.js', './js/cinematic.js', './js/encounter.js',
@@ -20,9 +20,19 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   // Trafic ADS-B : toujours le réseau (jamais de vieux avions en cache)
   if (url.hostname.includes('adsb')) return;
-  // Fonds de carte : réseau d'abord, cache en secours
-  if (url.hostname.includes('tile.openstreetmap')) {
-    e.respondWith(fetch(e.request).then(r => { const cp = r.clone(); caches.open(VERSION + '-tiles').then(c => c.put(e.request, cp)); return r; }).catch(() => caches.match(e.request)));
+  // Fonds de carte (raster + vectoriel) : cache d'abord (zoom instantané), mise à jour en arrière-plan, plafonné
+  if (/tile\.openstreetmap|openfreemap|basemaps/.test(url.hostname)) {
+    e.respondWith(caches.open(VERSION + '-tiles').then(async c => {
+      const hit = await c.match(e.request);
+      const net = fetch(e.request).then(r => {
+        if (r && (r.ok || r.type === 'opaque')) {
+          c.put(e.request, r.clone());
+          c.keys().then(k => { if (k.length > 1500) k.slice(0, k.length - 1500).forEach(x => c.delete(x)); });
+        }
+        return r;
+      }).catch(() => hit);
+      return hit || net;
+    }));
     return;
   }
   // Fichiers du jeu : réseau d'abord (mises à jour immédiates), cache si hors ligne

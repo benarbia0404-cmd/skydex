@@ -47,14 +47,39 @@ function initMap() {
   map = L.map('map', { center: [me.lat, me.lon], zoom: 8, zoomControl: false, attributionControl: true, minZoom: 4, maxZoom: 13, worldCopyJump: true });
   const customTileUrl = window.SKYDEX_TILE_URL || localStorage.getItem('skydex.tileUrl');
   const tileUrl = customTileUrl || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-  const tiles = L.tileLayer(tileUrl, {
-    attribution: '© OpenStreetMap · ADS-B: adsb.lol',
-    maxZoom: 19,
-    className: customTileUrl ? 'radar-tiles-custom' : 'radar-tiles-osm',
-  }).addTo(map);
-  tiles.on('tileerror', e => {
-    if (e && e.tile) e.tile.style.display = 'none';
-  });
+  const addRaster = () => {
+    const tiles = L.tileLayer(tileUrl, {
+      attribution: '© OpenStreetMap · ADS-B: adsb.lol',
+      maxZoom: 19,
+      className: customTileUrl ? 'radar-tiles-custom' : 'radar-tiles-osm',
+      updateWhenZooming: false,   // pas de re-chargement à chaque cran de zoom
+      updateWhenIdle: true,
+      keepBuffer: 4,              // garde les tuiles voisines en mémoire
+    }).addTo(map);
+    tiles.on('tileerror', e => { if (e && e.tile) e.tile.style.display = 'none'; });
+  };
+  // Rendu vectoriel (WebGL) : zoom fluide, tuiles ~10x plus légères, mises en cache par le service worker.
+  // Repli automatique sur les tuiles raster si WebGL/MapLibre est indisponible.
+  let vector = false;
+  if (!customTileUrl && window.maplibregl && L.maplibreGL) {
+    try {
+      const cv = document.createElement('canvas');
+      if (cv.getContext('webgl2') || cv.getContext('webgl')) {
+        const gl = L.maplibreGL({
+          style: 'https://tiles.openfreemap.org/styles/dark',
+          attribution: '© OpenStreetMap · OpenFreeMap · ADS-B: adsb.lol',
+        }).addTo(map);
+        vector = true;
+        const mlm = gl.getMaplibreMap && gl.getMaplibreMap();
+        if (mlm) mlm.on('error', ev => {
+          if (ev && ev.error && /style|Failed to fetch|NetworkError/i.test(String(ev.error.message || ev.error)) && !map._rasterFallback) {
+            map._rasterFallback = true; map.removeLayer(gl); addRaster();
+          }
+        });
+      }
+    } catch (_) { vector = false; }
+  }
+  if (!vector) addRaster();
   meMarker = L.marker([me.lat, me.lon], {
     icon: L.divIcon({
       className: 'me-mk',
@@ -246,13 +271,64 @@ function passes(f) {
 }
 const sizeOf = m => ({ ga: 26, prop: 30, bizjet: 28, narrow: 32, wide: 40, wide6: 46, quad: 42, quadprop: 38, delta: 38, stealth: 40 }[m.shape] || 32);
 
+// Regroupement dynamique : en zone dense (zoom < 11), les avions communs/peu communs proches
+// sont fusionnés en une bulle compteur. Rares+, spéciaux et avion sélectionné restent toujours individuels.
+const clusterMarkers = new Map();
+const CLUSTER_PX = 60, CLUSTER_MIN = 3, CLUSTER_MAX_ZOOM = 11;
+function updateClusters(b, z, now) {
+  const clustered = new Set();
+  const cells = new Map();
+  if (z < CLUSTER_MAX_ZOOM) {
+    for (const f of feed.flights.values()) {
+      if (f.id === selectedId || f.special || RARITIES[f.model.rarity].order >= 2 || !passes(f)) continue;
+      const [lat, lon] = posAt(f, now);
+      if (!b.contains([lat, lon])) continue;
+      const pt = map.latLngToContainerPoint([lat, lon]);
+      const k = Math.floor(pt.x / CLUSTER_PX) + ':' + Math.floor(pt.y / CLUSTER_PX);
+      let c = cells.get(k);
+      if (!c) cells.set(k, c = []);
+      c.push({ f, lat, lon });
+    }
+  }
+  const aliveK = new Set();
+  for (const [k, arr] of cells) {
+    if (arr.length < CLUSTER_MIN) continue;
+    aliveK.add(k);
+    arr.forEach(x => clustered.add(x.f.id));
+    const lat = arr.reduce((s, x) => s + x.lat, 0) / arr.length;
+    const lon = arr.reduce((s, x) => s + x.lon, 0) / arr.length;
+    const nNew = arr.filter(x => !owned(x.f.model.id)).length;
+    const color = RARITIES[arr.reduce((best, x) => RARITIES[x.f.model.rarity].order > RARITIES[best].order ? x.f.model.rarity : best, 'common')].color;
+    const sig = `${arr.length}|${nNew}|${color}`;
+    let o = clusterMarkers.get(k);
+    if (!o) {
+      const mk = L.marker([lat, lon], { icon: L.divIcon({ className: 'cluster-mk', iconSize: [44, 44], iconAnchor: [22, 22], html: '' }), zIndexOffset: -500 }).addTo(map);
+      mk.on('click', e => { L.DomEvent.stopPropagation(e); map.setView(mk.getLatLng(), Math.min(map.getZoom() + 2, 13)); });
+      o = { mk, sig: '' };
+      clusterMarkers.set(k, o);
+    }
+    o.mk.setLatLng([lat, lon]);
+    if (o.sig !== sig) {
+      o.sig = sig;
+      o.mk.setIcon(L.divIcon({
+        className: 'cluster-mk', iconSize: [44, 44], iconAnchor: [22, 22],
+        html: `<div class="cl-bub" style="--rc:${color}"><b>${arr.length}</b>${nNew ? `<i>${nNew}</i>` : ''}</div>`,
+      }));
+    }
+  }
+  for (const [k, o] of clusterMarkers) if (!aliveK.has(k)) { o.mk.remove(); clusterMarkers.delete(k); }
+  return clustered;
+}
+
 function renderFlights() {
   const b = map.getBounds().pad(0.2), now = Date.now();
   const z = map.getZoom(), sz = map.getSize();
   const alive = new Set();
   const visibleList = [];
+  const clustered = updateClusters(b, z, now);
 
   for (const f of feed.flights.values()) {
+    if (clustered.has(f.id)) continue;
     const [lat, lon] = posAt(f, now);
     if (!b.contains([lat, lon]) || (!passes(f) && f.id !== selectedId)) continue;
     alive.add(f.id);
