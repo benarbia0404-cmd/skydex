@@ -8,7 +8,6 @@ import { RARITIES, ART_MAP, planeSVG } from './catalog.js';
 import { state, save, owned, addCard, addXP, levelInfo, missionEvent } from './state.js';
 import { cardHTML, cardBackHTML, cardArtSVG, attachSpinner } from './cards.js';
 import { sfx, startWindAmbience, stopWindAmbience, vibrate, burst, RAINBOW } from './fx.js';
-import { playWalkout } from './cinematic.js';
 import { $, $$, wait, toast, esc, iconSVG } from './ui.js';
 import { FC, FA, fictionAirline, fictionCallsign } from './brand.js';
 
@@ -26,21 +25,6 @@ export function canCatchAgain(f) {
 }
 
 const attempts = {};
-
-function orbitsHTML(order) {
-  const n = Math.max(0, Math.min(3, order - 1));
-  const sats = k => '<i></i>'.repeat(k);
-  let html = '';
-  for (let i = 0; i < n; i++) {
-    const ring = `<div class="orb-ring" style="--od:${7 + i * 2.6}s;--dir:${i % 2 ? -1 : 1}">${sats(i === 0 ? 2 : 1 + (order >= 3 ? 1 : 0))}</div>`;
-    html += `<div class="orb back o${i + 1}">${ring}</div><div class="orb front o${i + 1}">${ring}</div>`;
-  }
-  if (order >= 4) {
-    html += `<div class="enc-sparks">${Array.from({ length: 14 }, () =>
-      `<b style="--x:${(Math.random() * 100).toFixed(0)}%;--d:${(Math.random() * 3).toFixed(2)}s;--s:${(0.6 + Math.random() * 0.8).toFixed(2)}"></b>`).join('')}</div>`;
-  }
-  return html;
-}
 
 function viewfinderPlaneHTML(model, f) {
   const art = !model.generic && ART_MAP[model.id];
@@ -106,10 +90,7 @@ function flyPolaroidToCollection(model, r, f, fromRect) {
  * ctx: { inRange, distKm, rangeKm, onCaught(f), onFled(f), onClose() }
  */
 export async function openEncounter(f, ctx) {
-  const model = f.model, r = RARITIES[model.rarity];
-  if (r.order >= 3 || f.special) {
-    await playWalkout(model);
-  }
+  const model = f.model, r = RARITIES[model.rarity] || RARITIES.common;
   const ov = $('#overlay');
   ov.hidden = false;
   ov.className = 'overlay enc capture2 ' + model.rarity;
@@ -122,8 +103,8 @@ export async function openEncounter(f, ctx) {
   else if (!ctx.inRange) blocked = `Trop loin (${Math.round(ctx.distKm)} km) · portée ${ctx.rangeKm} km`;
 
   const routeStr = f.from && f.to ? `${f.from.code} → ${f.to.code}` : '';
-  const baseRate = state.stats.captures < 3 ? 1 : CATCH_RATE[model.rarity];
-  const rarityTag = r.order >= 4 ? `✦ ${r.label.toUpperCase()} ✦` : r.label.toUpperCase();
+  const baseRate = state.stats.captures < 3 ? 1 : (CATCH_RATE[model.rarity] ?? 0.85);
+  const rarityTag = r.label.toUpperCase();
   const flStr = `FL${Math.max(10, Math.round((f.alt || 32000) / 100))}`;
   const spdStr = `${Math.round(f.gs || 440)} KT`;
   const hdgStr = `${String(Math.round(f.track || 0)).padStart(3, '0')}°`;
@@ -142,12 +123,9 @@ export async function openEncounter(f, ctx) {
     </div>
     <div class="enc-stage" id="enc-stage" style="--ec:${r.color};--rc:${r.color};--lk:0;--blur:6.5px">
       <div class="enc-aura"></div>
-      ${r.order >= 3 ? '<div class="enc-rays"></div>' : ''}
-      ${orbitsHTML(r.order)}
 
-      <!-- PHASE 1 : Viseur optique reflex + Bague de mise au point autour de l'objectif -->
+      <!-- PHASE 1 : Viseur optique reflex + Bague de mise au point autour de l'objectif (identique pour toutes les raretés) -->
       <div class="enc-vf" id="enc-vf">
-        <div class="vf-outer-ring" id="vf-outer-ring" aria-hidden="true">${ticksHTML}</div>
         <div class="vf-lens">
           <div class="vf-sky">
             <div class="vf-speedlines"></div>
@@ -161,6 +139,7 @@ export async function openEncounter(f, ctx) {
             <div class="vf-contrail t2"></div>
             <div class="vf-plane-sil">${planeSVG(model)}</div>
           </div>
+          <div class="vf-outer-ring" id="vf-outer-ring" aria-hidden="true">${ticksHTML}</div>
           <div class="vf-iris" id="vf-iris"></div>
           <div class="vf-hud-top mono">
             <span>WIND // ${spdStr}</span>
@@ -285,10 +264,9 @@ export async function openEncounter(f, ctx) {
   const valEl = $('#frc-val', ov), sharpEl = $('#sharp-pct', ov);
   const pctEl = $('#vf-pct', ov), zoomEl = $('#vf-zoom', ov);
 
-  // Plus la rareté est élevée, plus la tolérance de netteté AF est fine et plus la cible bouge légèrement
-  const TOLERANCES = [0.15, 0.13, 0.11, 0.09, 0.075];
-  const oi = Math.min(4, r.order), TOL = TOLERANCES[oi];
-  let targetF = 0.62 + (Math.random() * 0.22 - 0.06); // position idéale entre 0.56 et 0.84
+  // Mise au point optique et comportement du viseur strictement identiques pour toutes les catégories
+  const TOL = 0.13;
+  let targetF = 0.64 + (Math.random() * 0.16 - 0.08); // position idéale entre 0.56 et 0.72
   let curF = 0.12;                                     // position initiale de la bague (floue)
   let dragging = false, startX = 0, startF = 0, lastDetent = Math.round(curF * 32), wasInZone = false;
 
@@ -333,23 +311,19 @@ export async function openEncounter(f, ctx) {
     }
   }
 
-  // Turbulence en vol + dérive lente de la distance focale pour les avions rares+
+  // Mouvement de vol fluide dans le viseur (identique pour toutes les raretés)
   let driftRaf = 0;
   const driftLoop = now => {
     if (closed || !rig.isConnected) return;
     if (!stage.classList.contains('card-mode')) {
       const dist = Math.abs(curF - targetF);
       const sharp = Math.max(0, Math.min(1, 1 - dist / 0.55));
-      const amp = (1 - sharp * 0.78) * (9 + oi * 4);
-      const spd = 0.0017 + oi * 0.0004;
+      const amp = (1 - sharp * 0.82) * 10;
+      const spd = 0.0018;
       const dx = Math.sin(now * spd) * amp + Math.cos(now * spd * 1.6) * (amp * 0.35);
       const dy = Math.cos(now * spd * 1.25) * (amp * 0.6);
-      const bank = Math.sin(now * spd * 1.1) * (3.5 + oi * 1.5) * (1 - sharp * 0.7);
-      rig.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${bank.toFixed(1)}deg) scale(${(1 + sharp * 0.14).toFixed(3)})`;
-      if (oi >= 2 && !busy) {
-        targetF = Math.max(0.45, Math.min(0.86, targetF + Math.sin(now * 0.0014) * 0.0006 * oi));
-        renderFocusState();
-      }
+      const bank = Math.sin(now * spd * 1.1) * 4 * (1 - sharp * 0.75);
+      rig.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${bank.toFixed(1)}deg) scale(${(1 + sharp * 0.12).toFixed(3)})`;
     }
     driftRaf = requestAnimationFrame(driftLoop);
   };

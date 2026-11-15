@@ -1,5 +1,5 @@
 // Service worker SkyDex : coque de l'application disponible hors connexion, données de vol toujours en direct.
-const VERSION = 'skydex-v22';
+const VERSION = 'skydex-v23';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/app.js', './js/brand.js', './js/catalog.js', './js/cards.js', './js/cinematic.js', './js/encounter.js',

@@ -3638,12 +3638,18 @@ main {
 .card.kyara-card.enc,
 .cback-kyara.enc { font-size: clamp(10px, calc((100dvh - 400px) / 26), 15px); }
 
-.overlay.capture2 { justify-content: space-between; gap: 6px; overflow-x: hidden; }
-.overlay.capture2.common   { background: radial-gradient(circle at 50% 44%, #1a1f2b 0%, #07080c 70%), #07080c; }
-.overlay.capture2.uncommon { background: radial-gradient(circle at 50% 44%, rgba(74, 222, 128, .16) 0%, transparent 55%), radial-gradient(circle at 50% 44%, #0d1410 0%, #050706 80%); }
-.overlay.capture2.rare     { background: radial-gradient(circle at 50% 44%, rgba(56, 189, 248, .24) 0%, transparent 55%), radial-gradient(circle at 50% 44%, #0b1624 0%, #04070b 82%); }
-.overlay.capture2.epic     { background: radial-gradient(circle at 50% 44%, rgba(192, 132, 252, .3) 0%, transparent 55%), radial-gradient(circle at 50% 44%, #170e26 0%, #06040a 82%); }
-.overlay.capture2.legendary{ background: radial-gradient(circle at 50% 44%, rgba(251, 191, 36, .34) 0%, transparent 55%), radial-gradient(circle at 50% 44%, #22180a 0%, #060402 82%); }
+.overlay.capture2 {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  justify-content: space-between;
+  gap: 6px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--ec, #9aa7b5) 22%, #141926) 0%, #07080c 72%), #07080c;
+  background-color: #07080c;
+}
 
 .enc-flee {
   position: absolute;
@@ -3673,40 +3679,34 @@ main {
   font-style: normal; letter-spacing: .08em; font-size: 11px;
   padding: 2px 8px; border-radius: 99px; background: #f8fafc; color: #07080c; text-shadow: none;
 }
-.capture2.legendary .enc-rarity {
-  background: linear-gradient(90deg, #fde68a, #f59e0b, #fff7d1, #f59e0b, #fde68a);
-  background-size: 200% 100%;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: goldText 2.4s linear infinite;
-}
-.capture2.legendary .enc-rarity em { -webkit-text-fill-color: #07080c; }
-@keyframes goldText { to { background-position: -200% 0; } }
 .capture2 .enc-top h2 { font-size: 22px; margin: 4px 0 2px; }
 .enc-sub { font-size: 12px; color: var(--mut); line-height: 1.4; }
 
-/* Scène : tout est empilé au centre */
+/* Scène : tout est empilé au centre, strictement identique pour toutes les raretés */
 .capture2 .enc-stage {
+  position: relative;
   flex: 1;
   width: 100%;
   min-height: 0;
   display: grid;
   place-items: center;
   margin: 0;
+  overflow: hidden;
   isolation: isolate;
 }
 .capture2 .enc-stage > * { grid-area: 1 / 1; }
 
 .enc-aura {
-  width: 300px; height: 300px; border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--ec) 45%, transparent) 0%, transparent 70%);
+  position: absolute;
+  width: 280px; height: 280px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--ec) 42%, transparent) 0%, transparent 70%);
   filter: blur(18px);
   opacity: .55;
+  pointer-events: none;
   animation: auraPulse 2.8s ease-in-out infinite;
   z-index: 0;
 }
-.capture2.common .enc-aura { opacity: .25; }
-.capture2.legendary .enc-aura { width: 380px; height: 380px; opacity: .85; }
-@keyframes auraPulse { 50% { transform: scale(1.12); opacity: .9; } }
+@keyframes auraPulse { 50% { transform: scale(1.12); opacity: .85; } }
 
 .enc-rays {
   width: 520px; height: 520px; border-radius: 50%;
@@ -4563,10 +4563,6 @@ main {
   opacity: 0; pointer-events: none;
   box-shadow: 0 18px 40px rgba(0, 0, 0, .85);
 }
-.vf-polaroid-frame span {
-  transform: translateY(27px);
-  color: #0f172a; font-size: 11px; font-weight: 800; letter-spacing: .12em;
-}
 .enc-stage.snapped .vf-polaroid-frame {
   opacity: 1;
   transition: opacity .18s ease;
@@ -4800,17 +4796,30 @@ main {
    DIAPHRAGME & POLAROÏD QUI GLISSE DANS LA COLLECTION
    ===================================================================== */
 
-/* Couronne crantée rotative autour de l'objectif */
+/* Couronne graduée rotative dans l'objectif */
 .vf-outer-ring {
-  position: absolute; inset: -10px;
-  border-radius: 32px;
-  border: 1.5px dashed rgba(229, 184, 75, .38);
+  position: absolute; inset: 8%;
+  border-radius: 50%;
+  border: 1px dashed rgba(229, 184, 75, .32);
   pointer-events: none;
+  z-index: 2;
   transition: transform .06s linear, border-color .2s;
+}
+.vf-outer-ring i {
+  position: absolute; left: 50%; top: 50%;
+  width: 1.5px; height: 5px;
+  margin: -2.5px 0 0 -.75px;
+  background: rgba(229, 184, 75, .45);
+  border-radius: 1px;
+  transform: rotate(calc(var(--ti, 0) * 10deg)) translateY(-102px);
+}
+.vf-outer-ring i.maj {
+  height: 8px; width: 2px;
+  background: rgba(253, 224, 71, .8);
 }
 .enc-stage.inzone .vf-outer-ring {
   border-color: #fde047;
-  box-shadow: 0 0 24px rgba(253, 224, 71, .45);
+  box-shadow: 0 0 24px rgba(253, 224, 71, .35);
 }
 
 /* Flou optique dynamique lié à la bague de mise au point */
