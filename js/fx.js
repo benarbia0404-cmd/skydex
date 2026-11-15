@@ -60,19 +60,81 @@ export function sfx(name) {
     case 'shimmer': [1568, 1976, 2349, 2637, 3136].forEach((f, i) => tone(f, 0.5, 'sine', 0.045, i * 0.07)); break;
     case 'levelup': [523, 784, 1046, 1568].forEach((f, i) => tone(f, 0.2, 'sine', 0.12, i * 0.08)); break;
     case 'shutter':
-      noise(0.055, 1800, 600, 0.22);
-      tone(1400, 0.035, 'square', 0.09);
-      noise(0.065, 900, 2600, 0.18);
-      tone(1760, 0.09, 'sine', 0.11, 0.055);
+      // Déclic mécanique net d'obturateur reflex (miroir + rideau + bip AF)
+      tone(2200, 0.018, 'square', 0.14);
+      noise(0.038, 2400, 700, 0.28);
+      tone(180, 0.045, 'triangle', 0.16, 0.012, 75);
+      noise(0.042, 900, 3200, 0.22);
+      tone(1650, 0.022, 'square', 0.11, 0.055);
+      break;
+    case 'focusClick':
+      // Cran mécanique de la bague de mise au point
+      tone(1350, 0.016, 'triangle', 0.065, 0, 680);
+      break;
+    case 'focusLock':
+      // Double bip cristallin de confirmation de netteté AF
+      tone(1760, 0.055, 'sine', 0.11);
+      tone(2349, 0.075, 'sine', 0.12, 0.06);
       break;
     case 'polaroid':
       noise(0.32, 600, 2400, 0.08);
       [587, 740, 880, 1175, 1480].forEach((f, i) => tone(f, 0.28, 'triangle', 0.09, i * 0.065));
       break;
+    case 'slideToHangar':
+      noise(0.42, 500, 2800, 0.11);
+      [784, 1046, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.1, 0.18 + i * 0.06));
+      break;
     case 'combo':
       [659, 880, 1175, 1568].forEach((f, i) => tone(f, 0.14, 'triangle', 0.11, i * 0.055));
       break;
   }
+}
+
+let windNode = null;
+/** Démarre le souffle d'ambiance du vent en altitude + réacteur lointain. */
+export function startWindAmbience() {
+  stopWindAmbience();
+  if (!state.settings.sound) return;
+  const a = audio(); if (!a) return;
+  try {
+    const dur = 3.0, n = Math.floor(a.sampleRate * dur);
+    const buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < n; i++) {
+      const w = Math.random() * 2 - 1;
+      b0 = 0.997 * b0 + w * 0.029;
+      b1 = 0.985 * b1 + w * 0.032;
+      b2 = 0.950 * b2 + w * 0.045;
+      d[i] = (b0 + b1 + b2) * 0.35;
+    }
+    const src = a.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const flt = a.createBiquadFilter();
+    flt.type = 'bandpass'; flt.frequency.value = 380; flt.Q.value = 0.85;
+    const lfo = a.createOscillator(), lfoGain = a.createGain();
+    lfo.frequency.value = 0.28; lfoGain.gain.value = 180;
+    lfo.connect(flt.frequency);
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, a.currentTime);
+    g.gain.linearRampToValueAtTime(0.055, a.currentTime + 0.6);
+    src.connect(flt).connect(g).connect(a.destination);
+    src.start(); lfo.start();
+    windNode = { src, lfo, g, a };
+  } catch (_) {}
+}
+
+/** Coupe proprement le souffle d'ambiance du vent. */
+export function stopWindAmbience() {
+  if (!windNode) return;
+  const { src, lfo, g, a } = windNode;
+  windNode = null;
+  try {
+    const t = a.currentTime;
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    setTimeout(() => { try { src.stop(); lfo.stop(); } catch (_) {} }, 280);
+  } catch (_) {}
 }
 
 let lastLockBeep = 0;

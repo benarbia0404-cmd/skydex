@@ -1,11 +1,13 @@
-// Rencontre + capture « Spotter » :
-// 1) L'avion réel vole dans un viseur téléobjectif / HUD de cockpit (nuages, traînées, télémétrie, turbulence).
-// 2) Le joueur MAINTIENT pour verrouiller (bip radar qui s'accélère, réticule qui se resserre) et RELÂCHE dans la zone dorée.
-// 3) Flash photo « SPOT ! » -> le cliché se développe façon Polaroid et se transforme en Carte 3D holographique manipulable.
+// Rencontre + capture « Spotter Reflex » :
+// 1) L'avion réel vole dans le viseur optique avec son du vent en altitude et reflets solaires sur la carlingue.
+// 2) Le joueur tourne/glisse la BAGUE DE MISE AU POINT tactile (crans haptiques + clics mécaniques) pour rendre l'avion net.
+// 3) Au relâchement : déclic mécanique net d'obturateur + retour haptique + flash lumineux réaliste.
+// 4) Le cliché se transforme en Polaroïd, pivote en 3D pour révéler la carte et ses statistiques complètes,
+//    puis un Polaroïd avec indicateur de rareté glisse jusque dans l'onglet Collection.
 import { RARITIES, ART_MAP, planeSVG } from './catalog.js';
 import { state, save, owned, addCard, addXP, levelInfo, missionEvent } from './state.js';
 import { cardHTML, cardBackHTML, cardArtSVG, attachSpinner } from './cards.js';
-import { sfx, lockPulse, vibrate, burst, RAINBOW } from './fx.js';
+import { sfx, startWindAmbience, stopWindAmbience, vibrate, burst, RAINBOW } from './fx.js';
 import { playWalkout } from './cinematic.js';
 import { $, $$, wait, toast, esc, iconSVG } from './ui.js';
 import { FC, FA, fictionAirline, fictionCallsign } from './brand.js';
@@ -14,9 +16,8 @@ export const CATCH_RATE = { common: .97, uncommon: .92, rare: .85, epic: .75, le
 export const MAX_ATTEMPTS = 3;
 export const CAUGHT_COOLDOWN = 6 * 3600 * 1000;
 
-// Bonus de précision (timing dans la zone dorée) : réduit la part d'échec restante.
-export const THROW_BONUS = { excellent: 0.55, great: 0.32, nice: 0.12 };
-const THROW_LABEL = { excellent: 'SPOT PARFAIT !', great: 'SUPER SPOT !', nice: 'SPOT VALIDÉ !' };
+export const THROW_BONUS = { excellent: 0.58, great: 0.34, nice: 0.12 };
+const THROW_LABEL = { excellent: 'MISE AU POINT PARFAITE !', great: 'NETTETÉ OPTIMALE !', nice: 'CLICHÉ VALIDÉ !' };
 const STARS = { excellent: '★★★', great: '★★☆', nice: '★☆☆' };
 
 export function canCatchAgain(f) {
@@ -47,9 +48,58 @@ function viewfinderPlaneHTML(model, f) {
   const callsignDisp = fictionCallsign(f.callsign);
   if (art) {
     const style = art.filter ? ` style="filter:${art.filter}"` : '';
-    return `<div class="vf-art-wrap"><img class="vf-art-img" src="${art.src}" alt="${esc(model.name)}" draggable="false"${style}><div class="vf-art-tint"></div></div>`;
+    return `<div class="vf-art-wrap">
+      <img class="vf-art-img" src="${art.src}" alt="${esc(model.name)}" draggable="false"${style}>
+      <div class="vf-carlingue-glint"></div>
+      <div class="vf-art-tint"></div>
+    </div>`;
   }
-  return `<div class="vf-art-wrap vf-art-svg">${cardArtSVG(model, { airline: airlineDisp, callsign: callsignDisp })}</div>`;
+  return `<div class="vf-art-wrap vf-art-svg">
+    ${cardArtSVG(model, { airline: airlineDisp, callsign: callsignDisp })}
+    <div class="vf-carlingue-glint"></div>
+  </div>`;
+}
+
+/** Fait glisser un Polaroïd avec indicateur de rareté depuis la scène jusque dans le bouton Collection. */
+function flyPolaroidToCollection(model, r, f, fromRect) {
+  const tabBtn = $('#tab-collection');
+  if (!tabBtn || !fromRect) return;
+  const toRect = tabBtn.getBoundingClientRect();
+  const pol = document.createElement('div');
+  pol.className = 'flying-polaroid';
+  pol.style.setProperty('--rc', r.color);
+  pol.style.left = (fromRect.left + fromRect.width / 2 - 48) + 'px';
+  pol.style.top = (fromRect.top + fromRect.height / 2 - 60) + 'px';
+  pol.innerHTML = `
+    <div class="fp-photo">${viewfinderPlaneHTML(model, f)}</div>
+    <div class="fp-foot">
+      <span class="fp-rar" style="background:${r.color}">${esc(r.label.toUpperCase())}</span>
+      <b class="mono">${esc(model.code || model.id)}</b>
+    </div>`;
+  document.body.appendChild(pol);
+
+  const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
+  const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
+
+  sfx('slideToHangar');
+  const anim = pol.animate([
+    { transform: 'translate(0, 0) scale(1) rotate(-4deg)', opacity: 1 },
+    { transform: `translate(${dx * 0.45}px, ${dy * 0.25 - 65}px) scale(0.82) rotate(8deg)`, opacity: 1, offset: 0.48 },
+    { transform: `translate(${dx}px, ${dy}px) scale(0.18) rotate(16deg)`, opacity: 0.15 },
+  ], { duration: 760, easing: 'cubic-bezier(.22, .9, .32, 1)', fill: 'forwards' });
+
+  anim.onfinish = () => {
+    pol.remove();
+    tabBtn.classList.remove('catch-pop'); void tabBtn.offsetWidth;
+    tabBtn.classList.add('catch-pop');
+    vibrate([25, 30, 50]);
+    const badge = document.createElement('div');
+    badge.className = 'tab-rar-pop mono';
+    badge.style.setProperty('--rc', r.color);
+    badge.textContent = `+1 ${r.label.toUpperCase()}`;
+    tabBtn.appendChild(badge);
+    setTimeout(() => badge.remove(), 1400);
+  };
 }
 
 /**
@@ -79,6 +129,9 @@ export async function openEncounter(f, ctx) {
   const hdgStr = `${String(Math.round(f.track || 0)).padStart(3, '0')}°`;
   const distStr = `${Math.max(1, Math.round(ctx.distKm || 12))} KM`;
 
+  const ticksHTML = Array.from({ length: 36 }, (_, i) =>
+    `<i style="--ti:${i}" class="${i % 3 === 0 ? 'maj' : ''}"></i>`).join('');
+
   ov.innerHTML = `
     <button class="enc-flee" id="enc-back" aria-label="Retour au radar">✕</button>
     ${ctx.infoHTML ? '<button class="enc-infobtn" id="enc-infobtn" aria-label="Infos du vol">i</button>' : ''}
@@ -87,13 +140,14 @@ export async function openEncounter(f, ctx) {
       <h2>${esc(model.name)}</h2>
       <div class="enc-sub mono">${esc(FC(f))}${f.airline ? ' · ' + esc(FA(f)) : ''}${routeStr ? ' · ' + esc(routeStr) : ''} · ${flStr}</div>
     </div>
-    <div class="enc-stage" id="enc-stage" style="--ec:${r.color};--rc:${r.color};--lk:0">
+    <div class="enc-stage" id="enc-stage" style="--ec:${r.color};--rc:${r.color};--lk:0;--blur:6.5px">
       <div class="enc-aura"></div>
       ${r.order >= 3 ? '<div class="enc-rays"></div>' : ''}
       ${orbitsHTML(r.order)}
 
-      <!-- PHASE 1 : Viseur optique / cockpit sur l'avion en vol -->
+      <!-- PHASE 1 : Viseur optique reflex + Bague de mise au point autour de l'objectif -->
       <div class="enc-vf" id="enc-vf">
+        <div class="vf-outer-ring" id="vf-outer-ring" aria-hidden="true">${ticksHTML}</div>
         <div class="vf-lens">
           <div class="vf-sky">
             <div class="vf-speedlines"></div>
@@ -107,15 +161,16 @@ export async function openEncounter(f, ctx) {
             <div class="vf-contrail t2"></div>
             <div class="vf-plane-sil">${planeSVG(model)}</div>
           </div>
+          <div class="vf-iris" id="vf-iris"></div>
           <div class="vf-hud-top mono">
-            <span>REC ● LIVE ADS-B</span>
-            <span id="vf-zoom">ZOOM 1.0×</span>
+            <span>WIND // ${spdStr}</span>
+            <span id="vf-zoom">FOCUS 0%</span>
           </div>
           <div class="vf-reticle" id="enc-reticle">
             <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
             <div class="vf-ring"></div>
             <div class="vf-cross"></div>
-            <span class="vf-lock-pct mono" id="vf-pct">PRÊT</span>
+            <span class="vf-lock-pct mono" id="vf-pct">FLOU · TOURNE LA BAGUE</span>
           </div>
           <div class="vf-hud-bot mono">
             <span>${flStr}</span>
@@ -123,13 +178,16 @@ export async function openEncounter(f, ctx) {
             <span>HDG ${hdgStr}</span>
             <span>${distStr}</span>
           </div>
-          <div class="vf-polaroid-frame">
-            <span class="mono">${esc(FC(f))} // ${esc(model.code || model.id)}</span>
+          <div class="vf-polaroid-frame" id="vf-polaroid">
+            <div class="vfp-meta">
+              <span class="vfp-rar" style="background:${r.color}">${esc(r.label.toUpperCase())}</span>
+              <b class="mono">${esc(FC(f))} // ${esc(model.code || model.id)}</b>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- PHASE 2 : Carte 3D holographique (révélée après le développement Polaroid) -->
+      <!-- PHASE 2 : Carte 3D holographique + statistiques complètes -->
       <div class="enc-card-persp" id="enc-card-persp">
         <div class="enc-card-3d" id="enc-card">
           <div class="showcase-3d-card" id="enc-spin">
@@ -154,33 +212,30 @@ export async function openEncounter(f, ctx) {
     </div>
 
     <div class="cap-locks" id="cap-locks">
-      <i data-step="1">01 · SIGNAL</i>
-      <i data-step="2">02 · FOCUS</i>
-      <i data-step="3">03 · SPOT</i>
+      <i data-step="1">01 · CADRAGE</i>
+      <i data-step="2">02 · MISE AU POINT</i>
+      <i data-step="3">03 · DÉCLIC</i>
     </div>
 
     <div class="enc-actions" id="enc-actions">
       ${blocked
         ? `<div class="enc-blocked-msg">${blocked}</div>`
-        : `<div class="shutter-zone" id="shutter-zone">
-            <div class="shutter-hint" id="shutter-hint">MAINTIENS pour verrouiller · RELÂCHE dans la <b>zone dorée</b></div>
-            <div class="shutter-bar" id="shutter-bar">
-              <div class="sb-fill" id="sb-fill"></div>
-              <div class="sb-sweet" id="sb-sweet"><span>SPOT ★</span></div>
-            </div>
-            <div class="shutter" id="shutter" role="button" aria-label="Maintenir pour verrouiller puis relâcher dans la zone dorée">
-              <svg class="sh-gauge" viewBox="0 0 120 120" aria-hidden="true">
-                <circle class="g-track" cx="60" cy="60" r="52" pathLength="100"/>
-                <circle class="g-zone" id="g-zone" cx="60" cy="60" r="52" pathLength="100"/>
-                <circle class="g-prog" id="g-prog" cx="60" cy="60" r="52" pathLength="100"/>
-              </svg>
-              <div class="sh-core">
-                <i class="sh-aperture"></i>
-                <span id="sh-label">HOLD</span>
-                <small id="sh-sub">VERROUILLER</small>
+        : `<div class="focus-zone" id="focus-zone">
+            <div class="shutter-hint" id="shutter-hint">GLISSE la <b>bague de mise au point</b> sur le repère doré puis <b>RELÂCHE</b></div>
+            <div class="focus-ring-ctrl" id="focus-dial" role="slider" aria-label="Bague de mise au point optique">
+              <div class="frc-scale mono">
+                <span>35mm</span><span>50mm</span><span>85mm</span><span>135mm</span><span>200mm</span><span>∞</span>
+              </div>
+              <div class="frc-track">
+                <div class="frc-knurl"></div>
+                <div class="frc-sweet" id="frc-sweet"><span>AF ★</span></div>
+                <div class="frc-thumb" id="frc-thumb">
+                  <i></i><i></i><i></i>
+                  <span class="mono" id="frc-val">50mm</span>
+                </div>
               </div>
             </div>
-            <div class="beacon-rate mono" id="shutter-rate">CHANCE ${Math.round(baseRate * 100)} % · ZONE DORÉE = BONUS MAX</div>
+            <div class="beacon-rate mono" id="shutter-rate">NETTETÉ <b id="sharp-pct">18%</b> · RELÂCHE QUAND L'AVION EST NET</div>
           </div>`}
     </div>`;
 
@@ -198,16 +253,17 @@ export async function openEncounter(f, ctx) {
   }
 
   const stage = $('#enc-stage', ov), card = $('#enc-card', ov), vf = $('#enc-vf', ov), rig = $('#vf-rig', ov);
+  const outerRing = $('#vf-outer-ring', ov);
   const locksBox = $('#cap-locks', ov), locks = $$('i', locksBox);
-  const spinner = attachSpinner($('#enc-spin', ov), { speed: 52, paused: true });
+  const spinner = attachSpinner($('#enc-spin', ov), { speed: 46, paused: true });
 
-  // Si bloqué (déjà capturé ou hors portée) : on montre directement la carte 3D en mode consultation
   if (blocked) {
     stage.classList.add('live', 'card-mode');
     locksBox.hidden = true;
     spinner.resume();
   } else {
     stage.classList.add('live', 'vf-mode');
+    startWindAmbience();
   }
 
   sfx(model.rarity === 'legendary' ? 'legend' : model.rarity === 'epic' ? 'epic' : 'appear');
@@ -216,6 +272,7 @@ export async function openEncounter(f, ctx) {
   let busy = false, closed = false;
   const close = () => {
     closed = true;
+    stopWindAmbience();
     spinner.destroy();
     ov.hidden = true; ov.innerHTML = '';
     ctx.onClose && ctx.onClose();
@@ -223,176 +280,211 @@ export async function openEncounter(f, ctx) {
   $('#enc-back').onclick = () => { if (busy) return; sfx('tap'); close(); };
   if (blocked) return;
 
-  // ------------------------------------------------------------ Mouvement de l'avion dans le viseur + Verrouillage
-  const shutter = $('#shutter', ov), gProg = $('#g-prog', ov), gZone = $('#g-zone', ov);
-  const sbFill = $('#sb-fill', ov), sbSweet = $('#sb-sweet', ov);
-  const lab = $('#sh-label', ov), subLab = $('#sh-sub', ov), pctEl = $('#vf-pct', ov), zoomEl = $('#vf-zoom', ov);
+  // ------------------------------------------------------------ Bague de mise au point tactile + Reflets carlingue
+  const dial = $('#focus-dial', ov), sweetEl = $('#frc-sweet', ov), thumbEl = $('#frc-thumb', ov);
+  const valEl = $('#frc-val', ov), sharpEl = $('#sharp-pct', ov);
+  const pctEl = $('#vf-pct', ov), zoomEl = $('#vf-zoom', ov);
 
-  // Plus la rareté est haute, plus la zone dorée est exigeante et le balayage nerveux
-  const ZONES = [[.58, .93], [.62, .92], [.66, .91], [.71, .90], [.75, .89]];
-  const FILLS = [1850, 1700, 1520, 1360, 1220];
-  const oi = Math.min(4, r.order), Z = ZONES[oi], FILL = FILLS[oi];
+  // Plus la rareté est élevée, plus la tolérance de netteté AF est fine et plus la cible bouge légèrement
+  const TOLERANCES = [0.15, 0.13, 0.11, 0.09, 0.075];
+  const oi = Math.min(4, r.order), TOL = TOLERANCES[oi];
+  let targetF = 0.62 + (Math.random() * 0.22 - 0.06); // position idéale entre 0.56 et 0.84
+  let curF = 0.12;                                     // position initiale de la bague (floue)
+  let dragging = false, startX = 0, startF = 0, lastDetent = Math.round(curF * 32), wasInZone = false;
 
-  gZone.style.strokeDasharray = `${((Z[1] - Z[0]) * 100).toFixed(1)} 100`;
-  gZone.style.strokeDashoffset = String(-Z[0] * 100);
-  if (sbSweet) {
-    sbSweet.style.left = (Z[0] * 100).toFixed(1) + '%';
-    sbSweet.style.width = ((Z[1] - Z[0]) * 100).toFixed(1) + '%';
+  function renderFocusState() {
+    const dist = Math.abs(curF - targetF);
+    const sharpness = Math.max(0, Math.min(1, 1 - dist / 0.55));
+    const inZ = dist <= TOL;
+    const nearZ = dist <= TOL * 1.85;
+    // Flou optique réel sur l'avion tant que la mise au point n'est pas faite
+    const blurPx = inZ ? 0 : Math.max(0.4, ((dist - TOL * 0.5) * 14));
+
+    stage.style.setProperty('--lk', sharpness.toFixed(3));
+    stage.style.setProperty('--blur', blurPx.toFixed(2) + 'px');
+    if (outerRing) outerRing.style.transform = `rotate(${(curF * 220 - 110).toFixed(1)}deg)`;
+    if (thumbEl) thumbEl.style.left = (curF * 100).toFixed(1) + '%';
+    if (sweetEl) {
+      sweetEl.style.left = ((targetF - TOL) * 100).toFixed(1) + '%';
+      sweetEl.style.width = (TOL * 200).toFixed(1) + '%';
+    }
+    const mm = Math.round(35 + curF * 165);
+    if (valEl) valEl.textContent = `${mm}mm`;
+    const spPct = Math.round(sharpness * 100);
+    if (sharpEl) sharpEl.textContent = `${spPct}%`;
+    if (zoomEl) zoomEl.textContent = `FOCUS ${spPct}% · ${mm}MM`;
+    if (pctEl) {
+      pctEl.textContent = inZ ? '● AF NET · RELÂCHE !' : nearZ ? 'PRESQUE NET…' : 'FLOU · TOURNE LA BAGUE';
+    }
+
+    locks[0]?.classList.toggle('on', sharpness >= 0.45);
+    locks[1]?.classList.toggle('on', nearZ);
+    locks[2]?.classList.toggle('on', inZ);
+
+    stage.classList.toggle('inzone', inZ);
+    dial.classList.toggle('inzone', inZ);
+
+    if (inZ !== wasInZone) {
+      wasInZone = inZ;
+      if (inZ && dragging) {
+        sfx('focusLock');
+        vibrate([22, 18, 42]);
+      }
+    }
   }
 
-  let hold = null, raf = 0, wasZone = false;
-
-  // Turbulence douce de l'avion en vol (se stabilise quand on verrouille)
+  // Turbulence en vol + dérive lente de la distance focale pour les avions rares+
   let driftRaf = 0;
   const driftLoop = now => {
     if (closed || !rig.isConnected) return;
     if (!stage.classList.contains('card-mode')) {
-      const p = hold ? Math.min(1, (now - hold.t0) / FILL) : 0;
-      const amp = (1 - p * 0.82) * (10 + oi * 4.5);
-      const spd = 0.0018 + oi * 0.00045;
-      const dx = Math.sin(now * spd) * amp + Math.cos(now * spd * 1.7) * (amp * 0.4);
-      const dy = Math.cos(now * spd * 1.3) * (amp * 0.65);
-      const bank = Math.sin(now * spd * 1.1) * (4 + oi * 1.8) * (1 - p * 0.75);
-      rig.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${bank.toFixed(1)}deg) scale(${(1 + p * 0.14).toFixed(3)})`;
+      const dist = Math.abs(curF - targetF);
+      const sharp = Math.max(0, Math.min(1, 1 - dist / 0.55));
+      const amp = (1 - sharp * 0.78) * (9 + oi * 4);
+      const spd = 0.0017 + oi * 0.0004;
+      const dx = Math.sin(now * spd) * amp + Math.cos(now * spd * 1.6) * (amp * 0.35);
+      const dy = Math.cos(now * spd * 1.25) * (amp * 0.6);
+      const bank = Math.sin(now * spd * 1.1) * (3.5 + oi * 1.5) * (1 - sharp * 0.7);
+      rig.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${bank.toFixed(1)}deg) scale(${(1 + sharp * 0.14).toFixed(3)})`;
+      if (oi >= 2 && !busy) {
+        targetF = Math.max(0.45, Math.min(0.86, targetF + Math.sin(now * 0.0014) * 0.0006 * oi));
+        renderFocusState();
+      }
     }
     driftRaf = requestAnimationFrame(driftLoop);
   };
+  renderFocusState();
   driftRaf = requestAnimationFrame(driftLoop);
 
-  const setP = p => {
-    gProg.style.strokeDashoffset = String(100 - p * 100);
-    if (sbFill) sbFill.style.width = (p * 100).toFixed(1) + '%';
-    stage.style.setProperty('--lk', p.toFixed(3));
-    if (pctEl) pctEl.textContent = p > 0 ? `LOCK ${Math.round(p * 100)}%` : 'PRÊT';
-    if (zoomEl) zoomEl.textContent = `ZOOM ${(1 + p * 2.5).toFixed(1)}×`;
-    locks[0]?.classList.toggle('on', p >= 0.22);
-    locks[1]?.classList.toggle('on', p >= 0.50);
-    locks[2]?.classList.toggle('on', p >= Z[0] && p <= Z[1]);
-  };
-
-  const qualityAt = p => (p >= Z[0] && p <= Z[1]) ? 'excellent' : ((p >= Z[0] - .14 && p < Z[0]) || p > Z[1]) ? 'great' : 'nice';
-
-  function resetLock() {
-    hold = null; cancelAnimationFrame(raf); wasZone = false; setP(0);
-    shutter.classList.remove('held', 'inzone'); stage.classList.remove('locking', 'inzone');
-    locks.forEach(l => (l.className = ''));
-    lab.textContent = 'HOLD';
-    if (subLab) subLab.textContent = 'VERROUILLER';
-  }
-
-  const tick = now => {
-    if (!hold) return;
-    const p = Math.min(1, (now - hold.t0) / FILL);
-    setP(p);
-    const inZ = p >= Z[0] && p <= Z[1];
-    lockPulse(p, inZ);
-    if (inZ !== wasZone) {
-      wasZone = inZ;
-      shutter.classList.toggle('inzone', inZ);
-      stage.classList.toggle('inzone', inZ);
-      lab.textContent = inZ ? 'SPOT !' : p > Z[1] ? 'TROP TARD' : 'LOCK…';
-      if (subLab) subLab.textContent = inZ ? 'RELÂCHE !' : p > Z[1] ? 'VITE !' : 'MAINTIENS';
-      if (inZ) vibrate([25, 15, 45]);
-    }
-    if (now - hold.lastV > 220 - p * 175) {
-      hold.lastV = now;
-      vibrate(8 + Math.round(p * 18));
-    }
-    if (p >= 1) { snap(1); return; }
-    raf = requestAnimationFrame(tick);
-  };
-
-  const startHold = e => {
-    if (busy || hold) return;
+  const onDown = e => {
+    if (busy || dragging) return;
     e.preventDefault();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
-    hold = { t0: performance.now(), lastV: 0 };
-    shutter.classList.add('held'); stage.classList.add('locking');
-    lab.textContent = 'LOCK…';
-    if (subLab) subLab.textContent = 'MAINTIENS';
+    dragging = true;
+    startX = e.clientX;
+    startF = curF;
+    stage.classList.add('locking');
+    dial.classList.add('held');
     $('#shutter-hint')?.classList.add('gone');
-    sfx('tap'); vibrate(15);
-    raf = requestAnimationFrame(tick);
+    // Si on touche directement la piste de la bague, on se place sous le doigt
+    const rect = dial.getBoundingClientRect();
+    if (e.currentTarget === dial && rect.width > 0) {
+      curF = Math.max(0.04, Math.min(0.96, (e.clientX - rect.left) / rect.width));
+      startF = curF;
+    }
+    sfx('focusClick'); vibrate(10);
+    renderFocusState();
   };
 
-  const endHold = () => {
-    if (!hold) return;
-    const dt = performance.now() - hold.t0;
-    // Simple appui très bref (< 150 ms) : on guide le joueur à maintenir
-    if (dt < 150) {
-      resetLock();
+  const onMove = e => {
+    if (!dragging || busy) return;
+    const rect = dial.getBoundingClientRect();
+    const span = Math.max(180, rect.width || 260);
+    if (e.currentTarget === dial) {
+      curF = Math.max(0.04, Math.min(0.96, (e.clientX - rect.left) / span));
+    } else {
+      const dx = e.clientX - startX;
+      curF = Math.max(0.04, Math.min(0.96, startF + dx / (span * 0.85)));
+    }
+    const detent = Math.round(curF * 34);
+    if (detent !== lastDetent) {
+      lastDetent = detent;
+      sfx('focusClick');
+      vibrate(7);
+    }
+    renderFocusState();
+  };
+
+  const onUp = () => {
+    if (!dragging || busy) return;
+    dragging = false;
+    dial.classList.remove('held');
+    const dist = Math.abs(curF - targetF);
+    // Si le joueur relâche encore très loin de la zone dès le tout début, on le laisse ajuster
+    if (dist > TOL * 2.6 && curF < 0.25) {
+      stage.classList.remove('locking');
       const h = $('#shutter-hint', ov);
       if (h) {
         h.classList.remove('gone', 'nudge'); void h.offsetWidth;
-        h.innerHTML = 'MAINTIENS appuyé puis RELÂCHE dans la <b>zone dorée</b> !';
+        h.innerHTML = 'Amène la <b>bague de mise au point</b> dans la zone <b>AF ★</b> pour déclencher !';
         h.classList.add('nudge');
       }
       return;
     }
-    snap(Math.min(1, dt / FILL));
+    snapPhoto(dist);
   };
 
-  const cancelHold = () => {
-    if (hold && !busy) { resetLock(); $('#shutter-hint')?.classList.remove('gone'); }
+  const onCancel = () => {
+    if (!dragging || busy) return;
+    dragging = false;
+    dial.classList.remove('held');
+    stage.classList.remove('locking');
   };
 
-  // On peut maintenir sur le bouton déclencheur OU directement sur le viseur optique
-  [shutter, vf].forEach(el => {
-    el.addEventListener('pointerdown', startHold);
-    el.addEventListener('pointerup', endHold);
-    el.addEventListener('pointercancel', cancelHold);
+  // La bague tactile ET le viseur permettent de tourner la mise au point
+  [dial, vf].forEach(el => {
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onCancel);
     el.addEventListener('contextmenu', e => e.preventDefault());
   });
 
-  async function snap(p) {
-    if (busy || !hold) return;
+  async function snapPhoto(dist) {
+    if (busy) return;
     busy = true;
-    const quality = qualityAt(p);
-    hold = null; cancelAnimationFrame(raf);
-    shutter.classList.remove('held'); shutter.classList.add('disabled');
+    const quality = dist <= TOL ? 'excellent' : dist <= TOL * 1.9 ? 'great' : 'nice';
+    dial.classList.add('disabled');
 
-    // Déclenchement photo : son d'obturateur + flash optique
-    sfx('shutter'); vibrate(75);
-    const flashEl = document.createElement('div'); flashEl.className = 'cam-flash'; ov.appendChild(flashEl);
-    setTimeout(() => flashEl.remove(), 520);
+    // Netteté instantanée au déclic + fermeture rapide du diaphragme + flash lumineux réaliste
+    stage.style.setProperty('--blur', '0px');
+    sfx('shutter');
+    vibrate([35, 20, 75]);
+    $('#vf-iris', ov)?.classList.add('blink');
+
+    const flashEl = document.createElement('div');
+    flashEl.className = 'cam-flash';
+    ov.appendChild(flashEl);
+    setTimeout(() => flashEl.remove(), 580);
 
     const qEl = $('#throw-quality', ov);
-    qEl.textContent = THROW_LABEL[quality]; qEl.className = 'throw-quality show q-' + quality;
+    qEl.textContent = THROW_LABEL[quality];
+    qEl.className = 'throw-quality show q-' + quality;
     stage.classList.add('snapped');
 
     const vR = vf.getBoundingClientRect();
     const cx = vR.left + vR.width / 2, cy = vR.top + vR.height / 2;
-    burst(cx, cy, quality === 'excellent' ? ['#fde047', '#fff'] : [r.color, '#fff'], quality === 'excellent' ? 42 : 24, 0.95);
+    burst(cx, cy, quality === 'excellent' ? ['#fde047', '#fff'] : [r.color, '#fff'], quality === 'excellent' ? 44 : 24, 0.95);
 
-    await resolveCapture(quality, cx, cy);
+    await resolveCapture(quality, cx, cy, vR);
   }
 
-  async function resolveCapture(quality, cx, cy) {
+  async function resolveCapture(quality, cx, cy, vR) {
     locks.forEach(l => (l.className = ''));
     attempts[f.id] = (attempts[f.id] || 0) + 1;
     const rate = Math.min(1, baseRate + (1 - baseRate) * THROW_BONUS[quality]);
     const ok = Math.random() < rate;
 
-    // 3 vérifications télémétriques rapides (suspense du développement)
     const checks = ok ? 3 : 1 + Math.floor(Math.random() * 2);
     for (let i = 0; i < checks; i++) {
       vf.classList.remove('vf-pulse'); void vf.offsetWidth; vf.classList.add('vf-pulse');
       locks[i].classList.add('on');
-      sfx('shake' + (i + 1)); vibrate(45);
-      await wait(420);
+      sfx('shake' + (i + 1)); vibrate(40);
+      await wait(380);
     }
     vf.classList.remove('vf-pulse');
     $('#throw-quality', ov).className = 'throw-quality';
 
     if (ok) {
+      stopWindAmbience();
       locks.forEach(l => l.classList.add('win'));
       sfx('lock');
-      await wait(140);
+      await wait(160);
 
-      // Développement Polaroid -> transformation en Carte 3D holographique !
+      // Développement du Polaroïd puis pivot 3D vers la Carte et ses statistiques
       sfx('polaroid');
       stage.classList.add('developing');
-      await wait(520);
+      await wait(540);
 
       const flash = document.createElement('div'); flash.className = 'flash'; ov.appendChild(flash);
       burst(cx, cy, model.rarity === 'legendary' ? RAINBOW : [r.color, '#fff', '#fbbf24'], 85 + r.order * 22, 1.25 + r.order * 0.1);
@@ -418,10 +510,12 @@ export async function openEncounter(f, ctx) {
 
       cancelAnimationFrame(driftRaf);
       locksBox.hidden = true;
-      $('#tab-collection').classList.add('catch-pop');
-      setTimeout(() => $('#tab-collection').classList.remove('catch-pop'), 700);
       ctx.onCaught && ctx.onCaught(f);
-      showSummary(res, xpGain, coinGain, lv, quality, state.stats.combo, beforeLv, afterLv);
+
+      // Le Polaroïd avec son indicateur de rareté glisse jusque dans la collection !
+      setTimeout(() => flyPolaroidToCollection(model, r, f, vR), 420);
+
+      showSummary(res, xpGain, coinGain, lv, quality, state.stats.combo, beforeLv, afterLv, vR);
     } else {
       locks.forEach(l => l.classList.add('fail'));
       sfx('fail'); vibrate(200);
@@ -429,20 +523,23 @@ export async function openEncounter(f, ctx) {
       vf.classList.add('vf-glitch');
       const left = MAX_ATTEMPTS - attempts[f.id];
       const qEl = $('#throw-quality', ov);
-      qEl.textContent = left > 0 ? 'FLOU ! IL A BOUGÉ' : 'SIGNAL PERDU…';
+      qEl.textContent = left > 0 ? 'MISE AU POINT RATÉE !' : 'PERDU DANS LES NUAGES…';
       qEl.className = 'throw-quality show q-fail';
       await wait(850);
       vf.classList.remove('vf-glitch');
+      $('#vf-iris', ov)?.classList.remove('blink');
       qEl.className = 'throw-quality';
       if (left > 0) {
-        stage.classList.remove('snapped', 'developing');
-        resetLock();
-        shutter.classList.remove('disabled');
+        stage.classList.remove('snapped', 'developing', 'locking');
+        curF = 0.14;
+        targetF = 0.58 + Math.random() * 0.24;
+        renderFocusState();
+        dial.classList.remove('disabled');
         $('#shutter-hint').classList.remove('gone');
-        $('#shutter-hint').innerHTML = 'RECADRE · RELÂCHE dans la <b>zone dorée</b>';
-        $('#shutter-rate', ov).textContent = `ENCORE ${left} ESSAI${left > 1 ? 'S' : ''} · VISE LA ZONE DORÉE`;
+        $('#shutter-hint').innerHTML = `ENCORE ${left} ESSAI${left > 1 ? 'S' : ''} · Aligne la bague sur <b>AF ★</b>`;
         busy = false;
       } else {
+        stopWindAmbience();
         vf.classList.add('vf-escape');
         await wait(650);
         delete attempts[f.id]; state.stats.combo = 0;
@@ -456,19 +553,24 @@ export async function openEncounter(f, ctx) {
     }
   }
 
-  function showSummary(res, xpGain, coinGain, lv, quality, combo, beforeLv, afterLv) {
+  function showSummary(res, xpGain, coinGain, lv, quality, combo, beforeLv, afterLv, vR) {
     ov.classList.add('caught');
     $('.enc-top', ov).innerHTML = `
-      <div class="enc-rarity">${res.isNew ? '✦ NOUVELLE CARTE DÉVELOPPÉE !' : `CLICHÉ ARCHIVÉ · ×${res.count}`}</div>
+      <div class="enc-rarity">${res.isNew ? '✦ NOUVEAU POLAROÏD DÉVELOPPÉ !' : `CLICHÉ ARCHIVÉ · ×${res.count}`}</div>
       <h2>${esc(model.name)}</h2>
       <div class="enc-sub mono"><span class="sum-stars">${STARS[quality]}</span> ${THROW_LABEL[quality]} · ${esc(FC(f))}</div>`;
 
-    // Bascule du viseur vers la Carte 3D holographique révélée en rotation
+    // Pivot 3D de la carte pour révéler les statistiques complètes
     stage.classList.remove('vf-mode', 'snapped', 'locking', 'inzone', 'developing');
     stage.classList.add('live', 'won', 'card-mode');
     card.className = 'enc-card-3d polaroid-in';
-    spinner.resume(); spinner.setSpeed(48); spinner.boost(640);
-    setTimeout(() => { if (card.isConnected) card.classList.remove('polaroid-in'); }, 950);
+    spinner.resume(); spinner.setSpeed(38); spinner.boost(780);
+    setTimeout(() => {
+      if (!card.isConnected) return;
+      card.classList.remove('polaroid-in');
+      // S'arrête de face après une rotation 3D complète pour laisser lire les statistiques
+      spinner.faceFront(620);
+    }, 950);
 
     const pct0 = Math.round((beforeLv.cur / beforeLv.need) * 100);
     const pct1 = Math.round((afterLv.cur / afterLv.need) * 100);
@@ -480,6 +582,9 @@ export async function openEncounter(f, ctx) {
     ].join('');
 
     $('#enc-actions', ov).innerHTML = `
+      <div class="win-toolbar">
+        <button class="btn-pill dark sm" id="enc-flip-3d">↻ Pivoter la carte 3D (Dos / Stats)</button>
+      </div>
       <div class="win-chips">${chips}</div>
       <div class="win-xp-box">
         <div class="win-xp-head mono">
@@ -489,9 +594,17 @@ export async function openEncounter(f, ctx) {
         <div class="win-xp-bar"><i id="win-xp-fill" style="width:${lv ? 0 : pct0}%"></i></div>
       </div>
       <div class="win-btns">
-        <button class="btn gold block" id="enc-ok">Continuer la chasse</button>
-        <button class="btn ghost block" id="enc-col">Voir dans mon hangar</button>
+        <button class="btn gold block" id="enc-ok">Classer &amp; continuer</button>
+        <button class="btn ghost block" id="enc-col">Ouvrir ma collection</button>
       </div>`;
+
+    let spinning = false;
+    $('#enc-flip-3d', ov).onclick = () => {
+      sfx('flip');
+      spinning = !spinning;
+      if (spinning) { spinner.resume(); spinner.setSpeed(54); spinner.boost(620); }
+      else { spinner.faceFront(480); }
+    };
 
     requestAnimationFrame(() => {
       setTimeout(() => {
@@ -504,7 +617,12 @@ export async function openEncounter(f, ctx) {
       sfx('levelup');
       toast(`FL ${lv.levelUp} atteint · +${lv.coins} CR${lv.pack ? ' + 1 Booster' : ''}`, 'gold', 4000);
     }
-    $('#enc-ok').onclick = () => { sfx('tap'); close(); };
+    $('#enc-ok').onclick = () => {
+      sfx('tap');
+      const cRect = card.getBoundingClientRect();
+      flyPolaroidToCollection(model, r, f, cRect.width ? cRect : vR);
+      close();
+    };
     $('#enc-col').onclick = () => { close(); document.querySelector('[data-tab=collection]').click(); };
   }
 }

@@ -712,8 +712,8 @@ function showOnboarding() {
   const slides = [
     { art: `<div class="ob-radar"><i></i><b style="--a:30deg;--r:38%"></b><b class="r" style="--a:150deg;--r:30%"></b><b class="e" style="--a:250deg;--r:42%"></b></div>`,
       title: 'Ton ciel est un terrain de chasse', text: 'Les vrais avions qui volent au-dessus de toi apparaissent en direct sur ton radar, avec leur compagnie, leur route et leur altitude.' },
-    { art: `<div class="ob-vf"><div class="ob-vf-ring"></div><div class="ob-vf-cross"></div><div class="ob-vf-plane">${planeSVG('wide')}</div><span class="ob-vf-tag mono">SPOT ★</span></div>`,
-      title: 'Verrouille, cadre, photographie', text: 'Touche un avion dans ton ciel pour ouvrir le viseur optique. Maintiens le déclencheur pour verrouiller la cible et relâche dans la zone dorée : ton cliché se développe en carte 3D !' },
+    { art: `<div class="ob-vf"><div class="ob-vf-ring"></div><div class="ob-vf-cross"></div><div class="ob-vf-plane">${planeSVG('wide')}</div><span class="ob-vf-tag mono">AF ★ NET</span></div>`,
+      title: 'Mise au point, déclic, Polaroïd', text: 'Touche un avion dans ton ciel et glisse la bague de mise au point tactile jusqu’à ce qu’il soit parfaitement net. Relâche pour déclencher le flash : ton Polaroïd pivote en carte 3D et glisse dans ta collection !' },
     { art: `<div class="ob-rar">${RARITY_LIST.map(r => `<span style="--rc:${r.color}">${r.code}</span>`).join('')}</div>`,
       title: 'Complète ton hangar', text: 'Commun, rare, épique… jusqu’aux légendaires comme le géant à double pont ou le supersonique Mach 2. Ouvre des packs, réussis tes missions et deviens le meilleur spotter.' },
     { art: `<div class="ob-pin">${iconSVG('locate')}</div>`,
