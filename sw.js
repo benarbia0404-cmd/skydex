@@ -1,9 +1,9 @@
 // Service worker SkyDex : coque de l'application disponible hors connexion, données de vol toujours en direct.
-const VERSION = 'skydex-v19';
+const VERSION = 'skydex-v20';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/app.js', './js/brand.js', './js/catalog.js', './js/cards.js', './js/cinematic.js', './js/encounter.js',
-  './js/flights.js', './js/fx.js', './js/packs.js', './js/screens.js', './js/state.js', './js/ui.js',
+  './js/flights.js', './js/fx.js', './js/packs.js', './js/planelayer.js', './js/screens.js', './js/state.js', './js/ui.js',
   './assets/icons/icon-192.png', './assets/icons/icon-512.png', './assets/icons/icon.svg',
 ];
 

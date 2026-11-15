@@ -3,6 +3,7 @@ import { RARITIES, RARITY_LIST, planeSVG } from './catalog.js';
 import { state, save, onChange, owned, resetAll, ensureMissions, missionEvent, grant } from './state.js';
 import { FlightFeed, posAt, distKm, flightProgress, NM } from './flights.js';
 import { openEncounter } from './encounter.js';
+import { PlaneLayer } from './planelayer.js';
 import { initCollection, renderCollection, renderMissions, renderShop, refreshAll } from './screens.js';
 import { sfx, vibrate } from './fx.js';
 import { AIRPORTS } from './flights.js';
@@ -25,7 +26,6 @@ const DEV = (() => {
 if (!DEV) state.settings.explorer = false;
 const watched = new Set(), alerted = new Set();
 let me = state.lastPos ? { lat: state.lastPos.lat, lon: state.lastPos.lon, real: false } : { lat: 48.8566, lon: 2.3522, real: false };
-const markers = new Map();          // id -> { mk, el, ic, angle }
 let selectedId = null, trailLine = null, routeLine = null, doneLine = null;
 const filt = { rarities: new Set(RARITY_LIST.map(r => r.id)), onlyNew: false };
 
@@ -106,7 +106,15 @@ function initMap() {
   map.on('zoomend', sizeSweep);
   sizeSweep();
   map.on('moveend zoomend', () => { syncView(); renderFlights(); });
-  map.on('click', () => { if (selectedId) deselect(); closeFilters(); });
+  planes = new PlaneLayer(map);
+  map.on('click', e => {
+    const h = planes.hit(e.containerPoint);
+    if (h && h.cluster) { map.setView([h.cluster.lat, h.cluster.lon], Math.min(map.getZoom() + 2, 13)); return; }
+    if (h) { pickAt(h.id, h.near); return; }
+    if (selectedId) deselect();
+    closeFilters();
+  });
+  map.on('mousemove', e => { map.getContainer().style.cursor = planes.hit(e.containerPoint) ? 'pointer' : ''; });
   syncView();
 }
 
@@ -271,142 +279,77 @@ function passes(f) {
 }
 const sizeOf = m => ({ ga: 26, prop: 30, bizjet: 28, narrow: 32, wide: 40, wide6: 46, quad: 42, quadprop: 38, delta: 38, stealth: 40 }[m.shape] || 32);
 
-// Regroupement dynamique : en zone dense (zoom < 11), les avions communs/peu communs proches
-// sont fusionnés en une bulle compteur. Rares+, spéciaux et avion sélectionné restent toujours individuels.
-const clusterMarkers = new Map();
-const CLUSTER_PX = 60, CLUSTER_MIN = 3, CLUSTER_MAX_ZOOM = 11;
-function updateClusters(b, z, now) {
-  const clustered = new Set();
-  const cells = new Map();
-  if (z < CLUSTER_MAX_ZOOM) {
-    for (const f of feed.flights.values()) {
-      if (f.id === selectedId || f.special || RARITIES[f.model.rarity].order >= 2 || !passes(f)) continue;
-      const [lat, lon] = posAt(f, now);
-      if (!b.contains([lat, lon])) continue;
-      const pt = map.latLngToContainerPoint([lat, lon]);
-      const k = Math.floor(pt.x / CLUSTER_PX) + ':' + Math.floor(pt.y / CLUSTER_PX);
-      let c = cells.get(k);
-      if (!c) cells.set(k, c = []);
-      c.push({ f, lat, lon });
-    }
-  }
-  const aliveK = new Set();
-  for (const [k, arr] of cells) {
-    if (arr.length < CLUSTER_MIN) continue;
-    aliveK.add(k);
-    arr.forEach(x => clustered.add(x.f.id));
-    const lat = arr.reduce((s, x) => s + x.lat, 0) / arr.length;
-    const lon = arr.reduce((s, x) => s + x.lon, 0) / arr.length;
-    const nNew = arr.filter(x => !owned(x.f.model.id)).length;
-    const color = RARITIES[arr.reduce((best, x) => RARITIES[x.f.model.rarity].order > RARITIES[best].order ? x.f.model.rarity : best, 'common')].color;
-    const sig = `${arr.length}|${nNew}|${color}`;
-    let o = clusterMarkers.get(k);
-    if (!o) {
-      const mk = L.marker([lat, lon], { icon: L.divIcon({ className: 'cluster-mk', iconSize: [44, 44], iconAnchor: [22, 22], html: '' }), zIndexOffset: -500 }).addTo(map);
-      mk.on('click', e => { L.DomEvent.stopPropagation(e); map.setView(mk.getLatLng(), Math.min(map.getZoom() + 2, 13)); });
-      o = { mk, sig: '' };
-      clusterMarkers.set(k, o);
-    }
-    o.mk.setLatLng([lat, lon]);
-    if (o.sig !== sig) {
-      o.sig = sig;
-      o.mk.setIcon(L.divIcon({
-        className: 'cluster-mk', iconSize: [44, 44], iconAnchor: [22, 22],
-        html: `<div class="cl-bub" style="--rc:${color}"><b>${arr.length}</b>${nNew ? `<i>${nNew}</i>` : ''}</div>`,
-      }));
-    }
-  }
-  for (const [k, o] of clusterMarkers) if (!aliveK.has(k)) { o.mk.remove(); clusterMarkers.delete(k); }
-  return clustered;
-}
+// Rendu Canvas : seuls les avions de la zone visible (+ marge) sont envoyés à la couche de dessin.
+// Regroupement dynamique : en zone dense (zoom < 11), les avions communs/peu communs proches fusionnent en bulle.
+// Rares+, spéciaux et avion sélectionné restent toujours individuels.
+let planes;
+const CLUSTER_MIN = 3, CLUSTER_MAX_ZOOM = 11, MAX_DRAW = 3000;
+const clusterPx = z => z < 7 ? 84 : z < 9 ? 66 : 56;
 
 function renderFlights() {
-  const b = map.getBounds().pad(0.2), now = Date.now();
-  const z = map.getZoom(), sz = map.getSize();
-  const alive = new Set();
-  const visibleList = [];
-  const clustered = updateClusters(b, z, now);
+  if (!map || !planes) return;
+  const z = map.getZoom(), sz = map.getSize(), now = Date.now();
+  const b = map.getBounds().pad(z >= 10 ? 0.6 : 0.4);   // marge : pas de « pop-in » pendant le glissement
+  const cpx = clusterPx(z), clusterOn = z < CLUSTER_MAX_ZOOM;
 
+  // 1) Filtrage géographique : uniquement ce qui est dans la zone visible
+  const vis = [];
   for (const f of feed.flights.values()) {
-    if (clustered.has(f.id)) continue;
+    const sel = f.id === selectedId;
+    if (!sel && !passes(f)) continue;
     const [lat, lon] = posAt(f, now);
-    if (!b.contains([lat, lon]) || (!passes(f) && f.id !== selectedId)) continue;
-    alive.add(f.id);
-    let o = markers.get(f.id);
-    const m = f.model, r = RARITIES[m.rarity], have = owned(m.id), s = sizeOf(m);
-    if (!o) {
-      const c = s + 16;
-      const mk = L.marker([lat, lon], {
-        icon: L.divIcon({
-          className: 'plane-mk',
-          iconSize: [c, c],
-          iconAnchor: [c / 2, c / 2],
-          html: `<div class="pm"><div class="pm-sh">${planeSVG(m)}</div><div class="pm-ring"></div><div class="pm-ic" style="inset:8px">${planeSVG(m)}</div><div class="pm-badge"></div><div class="pm-spark">✦</div><div class="pm-lbl"></div></div>`,
-        }),
-        zIndexOffset: r.order * 100 + (f.special ? 1000 : 0),
-      }).addTo(map);
-      mk.on('click', e => { L.DomEvent.stopPropagation(e); pickAt(f.id); });
-      const el = mk.getElement();
-      o = { mk, el, ic: el.querySelector('.pm-ic'), sh: el.querySelector('.pm-sh'), badge: el.querySelector('.pm-badge'), lbl: el.querySelector('.pm-lbl'), angle: f.track || 0, key: '' };
-      markers.set(f.id, o);
-    }
-    o.mk.setLatLng([lat, lon]);
-    const d = (((f.track || 0) - o.angle) % 360 + 540) % 360 - 180;
-    o.angle += d; o.ic.style.transform = `rotate(${o.angle}deg)`; o.sh.style.transform = `translate(7px,11px) rotate(${o.angle}deg)`;
-    const far = !state.settings.explorer && distKm(me.lat, me.lon, lat, lon) > RANGE_KM;
-    const key = `${have}|${f.id === selectedId}|${f.special}|${r.order}|${far}`;
-    if (o.key !== key) {
-      o.key = key;
-      // Halo pulsant (.hi) pour les avions Rare, Épique et Légendaire (r.order >= 2)
-      o.el.className = 'leaflet-marker-icon leaflet-zoom-animated leaflet-interactive plane-mk'
-        + (have ? ' owned' : ' new')
-        + (r.order >= 2 ? ' hi' : '')
-        + (f.special ? ' special' : '')
-        + (f.id === selectedId ? ' selected' : '')
-        + (/^(ga|prop)$/.test(m.shape) ? ' sz-ga' : '')
-        + (f.alt < 8000 ? ' lowz' : '')
-        + (far ? ' far' : '');
-      o.el.style.setProperty('--rc', r.color);
-      o.badge.textContent = r.order >= 2 ? r.code : (have ? '✓' : '');
-      o.badge.style.display = have || r.order >= 2 ? '' : 'none';
-    }
-    const pt = map.latLngToContainerPoint([lat, lon]);
-    visibleList.push({ f, o, r, pt });
+    if (!sel && !b.contains([lat, lon])) continue;
+    vis.push({ f, lat, lon, r: RARITIES[f.model.rarity], sel });
   }
 
-  // Gestion anti-chevauchement des étiquettes d'indicatifs : priorité à l'avion sélectionné puis aux plus rares
-  visibleList.sort((a, b) =>
-    (b.f.id === selectedId) - (a.f.id === selectedId)
-    || (!!b.f.special) - (!!a.f.special)
-    || b.r.order - a.r.order
-  );
-  const placed = [];
-  for (const item of visibleList) {
-    const { f, o, r, pt } = item;
-    const isSel = f.id === selectedId;
-    const inSafeBounds = pt.x >= 44 && pt.x <= sz.x - 44 && pt.y >= 88 && pt.y <= sz.y - 44
-      && !(pt.x > sz.x - 82 && pt.y > sz.y - 250);
-    const wantLabel = isSel || (state.settings.labels && inSafeBounds && (z >= 9 || (z >= 7 && r.order >= 1) || r.order >= 3));
-    if (!wantLabel) {
-      o.lbl.textContent = '';
-      o.lbl.style.display = 'none';
-      continue;
-    }
-    const overlapsLabel = !isSel && z < 11 && placed.some(p => Math.abs(p.x - pt.x) < 74 && Math.abs(p.y - pt.y) < 38);
-    const overlapsOtherIcon = !isSel && z < 11 && visibleList.some(other =>
-      other.f.id !== f.id && Math.abs(other.pt.x - pt.x) < 42 && (other.pt.y - pt.y) > -6 && (other.pt.y - pt.y) < 38
-    );
-    if (overlapsLabel || overlapsOtherIcon) {
-      o.lbl.textContent = '';
-      o.lbl.style.display = 'none';
-    } else {
-      o.lbl.textContent = FC(f);
-      o.lbl.style.display = 'block';
-      placed.push(pt);
-    }
+  // 2) Regroupement par cellules écran (index spatial O(n))
+  const cells = new Map(), singles = [], clusters = [];
+  for (const v of vis) {
+    if (!clusterOn || v.sel || v.f.special || v.r.order >= 2) { singles.push(v); continue; }
+    const pt = map.latLngToContainerPoint([v.lat, v.lon]);
+    const k = Math.floor(pt.x / cpx) + ':' + Math.floor(pt.y / cpx);
+    let c = cells.get(k); if (!c) cells.set(k, c = []);
+    c.push(v);
+  }
+  for (const arr of cells.values()) {
+    if (arr.length < CLUSTER_MIN) { singles.push(...arr); continue; }
+    const best = arr.reduce((a, x) => x.r.order > a.order ? x.r : a, RARITIES.common);
+    clusters.push({
+      n: arr.length, nNew: arr.filter(x => !owned(x.f.model.id)).length, color: best.color,
+      lat: arr.reduce((s, x) => s + x.lat, 0) / arr.length, lon: arr.reduce((s, x) => s + x.lon, 0) / arr.length,
+    });
   }
 
-  for (const [id, o] of markers) if (!alive.has(id)) { o.mk.remove(); markers.delete(id); }
+  // 3) Priorité : sélection > spéciaux > rareté ; plafond de sécurité
+  singles.sort((a, b) => (b.sel - a.sel) || (!!b.f.special - !!a.f.special) || (b.r.order - a.r.order));
+  if (singles.length > MAX_DRAW) singles.length = MAX_DRAW;
+
+  // 4) Étiquettes (anti-chevauchement) + état d'affichage
+  const placed = [], items = [];
+  const pts = singles.map(v => map.latLngToContainerPoint([v.lat, v.lon]));
+  singles.forEach((v, i) => {
+    const { f, r, sel } = v, m = f.model, pt = pts[i];
+    const have = owned(m.id), size = sizeOf(m);
+    const far = !state.settings.explorer && distKm(me.lat, me.lon, v.lat, v.lon) > RANGE_KM;
+    const inSafe = pt.x >= 44 && pt.x <= sz.x - 44 && pt.y >= 88 && pt.y <= sz.y - 44 && !(pt.x > sz.x - 82 && pt.y > sz.y - 250);
+    const isGa = /^(ga|prop)$/.test(m.shape);
+    const wantLabel = sel || (!isGa && state.settings.labels && inSafe && (z >= 9 || (z >= 7 && r.order >= 1) || r.order >= 3));
+    let label = null;
+    if (wantLabel) {
+      const ovLbl = !sel && z < 11 && placed.some(p => Math.abs(p.x - pt.x) < 74 && Math.abs(p.y - pt.y) < 38);
+      const ovIcon = !sel && z < 11 && singles.some((o, j) => j !== i && Math.abs(pts[j].x - pt.x) < 42 && (pts[j].y - pt.y) > -6 && (pts[j].y - pt.y) < 38);
+      if (!ovLbl && !ovIcon) { label = FC(f); placed.push(pt); }
+    }
+    items.push({
+      f, id: f.id, m, color: r.color, size, have, far, sel,
+      hi: r.order >= 2, special: !!f.special, isNew: !have, label,
+      badge: r.order >= 2 ? r.code : (have ? '✓' : ''),
+    });
+  });
+  // le sélectionné doit être dessiné en dernier (au-dessus) ; les rares au-dessus des communs
+  items.reverse();
+  planes.setData(items, clusters);
+
   updateAirportEdgeVisibility();
   let nIn = 0, nNew = 0, nRare = 0;
   const sky = [];
@@ -440,15 +383,8 @@ function select(id) {
 }
 
 // Plusieurs avions superposés sous le doigt : on propose de choisir
-function pickAt(id) {
-  const o0 = markers.get(id); if (!o0) return;
-  const p0 = map.latLngToContainerPoint(o0.mk.getLatLng());
-  const near = [];
-  for (const [fid, o] of markers) {
-    const f = feed.flights.get(fid); if (!f) continue;
-    const p = map.latLngToContainerPoint(o.mk.getLatLng());
-    if (Math.hypot(p.x - p0.x, p.y - p0.y) <= 30) near.push(f);
-  }
+function pickAt(id, nearIds) {
+  const near = (nearIds && nearIds.length ? nearIds : [id]).map(i => feed.flights.get(i)).filter(Boolean);
   if (near.length <= 1) { select(id); return; }
   sfx('tap');
   near.sort((a, b) => (!owned(b.model.id)) - (!owned(a.model.id)) || RARITIES[b.model.rarity].order - RARITIES[a.model.rarity].order);
@@ -686,7 +622,7 @@ function initFilters() {
       <label><input type="checkbox" id="f-trl" ${state.settings.trails ? 'checked' : ''}>Sillage radar</label>`;
     $$('[data-r]', box).forEach(c => c.onchange = () => { c.checked ? filt.rarities.add(c.dataset.r) : filt.rarities.delete(c.dataset.r); renderFlights(); });
     $('#f-new').onchange = e => { filt.onlyNew = e.target.checked; renderFlights(); };
-    $('#f-lbl').onchange = e => { state.settings.labels = e.target.checked; save(); markers.forEach(o => o.key = ''); renderFlights(); };
+    $('#f-lbl').onchange = e => { state.settings.labels = e.target.checked; save(); renderFlights(); };
     $('#f-trl').onchange = e => { state.settings.trails = e.target.checked; save(); if (!e.target.checked && trailLine) { trailLine.remove(); trailLine = null; } };
   };
   $('#btn-filter').onclick = () => {
